@@ -1,17 +1,17 @@
 cmake_minimum_required(VERSION 3.13)
 
-set(FAKEMOTE_MAJOR 0)
-set(FAKEMOTE_MINOR 5)
-set(FAKEMOTE_PATCH 1)
+set(EGC_MAJOR 0)
+set(EGC_MINOR 1)
+set(EGC_PATCH 0)
 execute_process(COMMAND
     git describe --dirty --always --exclude "*"
-    OUTPUT_VARIABLE FAKEMOTE_HASH
+    OUTPUT_VARIABLE EGC_HASH
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
 project(
-    fakemote
-    VERSION ${FAKEMOTE_MAJOR}.${FAKEMOTE_MINOR}.${FAKEMOTE_PATCH}
+    embedded-game-controller
+    VERSION ${EGC_MAJOR}.${EGC_MINOR}.${EGC_PATCH}
     LANGUAGES ASM C
 )
 
@@ -45,5 +45,4 @@ add_subdirectory(embedded-game-controller)
 
 if(CMAKE_SYSTEM_NAME MATCHES "Starlet")
     add_subdirectory(cios-lib)
-    add_subdirectory(source)
 endif()
