@@ -15,6 +15,8 @@ project(
     LANGUAGES ASM C
 )
 
+option(BUILD_EXAMPLE "Build example program" OFF)
+
 # This is a hack just to provide a more readable name to our target platform.
 # We could try to add a cmake toolchain file for Starlet in devkitPro.
 if(CMAKE_SYSTEM_NAME MATCHES "Generic-dkP")
@@ -45,4 +47,8 @@ add_subdirectory(embedded-game-controller)
 
 if(CMAKE_SYSTEM_NAME MATCHES "Starlet")
     add_subdirectory(cios-lib)
+endif()
+
+if(BUILD_EXAMPLE)
+    add_subdirectory(example)
 endif()
