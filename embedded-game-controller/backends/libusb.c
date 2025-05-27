@@ -46,7 +46,7 @@ static inline lu_transfer_t *lu_transfer_from_libusb(struct libusb_transfer *t)
 
 static inline lu_transfer_t *lu_transfer_from_egc(egc_usb_transfer_t *t)
 {
-    return (lu_transfer_t *)((u8*)t - offsetof(lu_transfer_t, t));
+    return (lu_transfer_t *)((u8 *)t - offsetof(lu_transfer_t, t));
 }
 
 static int64_t timespec_to_us(const struct timespec *ts)
@@ -72,21 +72,23 @@ static void transfer_cb(struct libusb_transfer *transfer)
     } else {
         t->t.status = EGC_USB_TRANSFER_STATUS_ERROR;
     }
-    if (t->callback) t->callback(&t->t);
+    if (t->callback)
+        t->callback(&t->t);
     free(t);
 }
 
-static const egc_usb_transfer_t *lu_ctrl_transfer_async(egc_input_device_t *input_device, u8 requesttype,
-                                                         u8 request, u16 value, u16 index,
-                                                         void *data, u16 length,
-                                                         egc_transfer_cb callback)
+static const egc_usb_transfer_t *lu_ctrl_transfer_async(egc_input_device_t *input_device,
+                                                        u8 requesttype, u8 request, u16 value,
+                                                        u16 index, void *data, u16 length,
+                                                        egc_transfer_cb callback)
 {
     lu_device_t *device = lu_device_from_input_device(input_device);
     lu_transfer_t *t;
     u8 *buffer;
 
     t = malloc(sizeof(lu_transfer_t));
-    if (!t) return NULL;
+    if (!t)
+        return NULL;
 
     buffer = t->buffer;
     t->usb = libusb_alloc_transfer(0);
@@ -113,16 +115,17 @@ static const egc_usb_transfer_t *lu_ctrl_transfer_async(egc_input_device_t *inpu
     return &t->t;
 }
 
-static const egc_usb_transfer_t *lu_intr_transfer_async(egc_input_device_t *input_device, u8 endpoint,
-                                                         void *data, u16 length,
-                                                         egc_transfer_cb callback)
+static const egc_usb_transfer_t *lu_intr_transfer_async(egc_input_device_t *input_device,
+                                                        u8 endpoint, void *data, u16 length,
+                                                        egc_transfer_cb callback)
 {
     lu_device_t *device = lu_device_from_input_device(input_device);
     lu_transfer_t *t;
     u8 *buffer;
 
     t = malloc(sizeof(lu_transfer_t) + 8 + length);
-    if (!t) return NULL;
+    if (!t)
+        return NULL;
 
     buffer = t->buffer;
     t->usb = libusb_alloc_transfer(0);
@@ -133,7 +136,8 @@ static const egc_usb_transfer_t *lu_intr_transfer_async(egc_input_device_t *inpu
         length = sizeof(t->buffer);
     }
 
-    libusb_fill_interrupt_transfer(t->usb, device->handle, endpoint, buffer, length, transfer_cb, t, 3000);
+    libusb_fill_interrupt_transfer(t->usb, device->handle, endpoint, buffer, length, transfer_cb, t,
+                                   3000);
 
     t->t.device = input_device;
     t->t.transfer_type = EGC_USB_TRANSFER_INTERRUPT;
@@ -175,23 +179,26 @@ static int lu_report_input(egc_input_device_t *device, const egc_input_state_t *
     return 0;
 }
 
-static int on_device_added(libusb_context *ctx, libusb_device *dev,
-                           libusb_hotplug_event event, void *user_data)
+static int on_device_added(libusb_context *ctx, libusb_device *dev, libusb_hotplug_event event,
+                           void *user_data)
 {
     struct libusb_device_descriptor desc;
     lu_device_t *device;
 
     int rc = libusb_get_device_descriptor(dev, &desc);
-    if (rc != LIBUSB_SUCCESS) return 0;
+    if (rc != LIBUSB_SUCCESS)
+        return 0;
 
     LOG_DEBUG("Device attached: %04x:%04x\n", desc.idVendor, desc.idProduct);
 
     /* Get an empty device slot */
     device = get_free_device_slot();
-    if (!device) return 0;
+    if (!device)
+        return 0;
 
     rc = libusb_open(dev, &device->handle);
-    if (rc != LIBUSB_SUCCESS) return 0;
+    if (rc != LIBUSB_SUCCESS)
+        return 0;
 
     libusb_set_auto_detach_kernel_driver(device->handle, 1);
     rc = libusb_claim_interface(device->handle, 0);
@@ -211,8 +218,8 @@ static int on_device_added(libusb_context *ctx, libusb_device *dev,
     return 0;
 }
 
-static int on_device_removed(libusb_context *ctx, libusb_device *dev,
-                             libusb_hotplug_event event, void *user_data)
+static int on_device_removed(libusb_context *ctx, libusb_device *dev, libusb_hotplug_event event,
+                             void *user_data)
 {
     lu_device_t *device;
 
@@ -238,13 +245,12 @@ static int lu_init(egc_event_cb event_handler)
     s_event_handler = event_handler;
 
     rc = libusb_init_context(&s_libusb_ctx, NULL, 0);
-    if (rc != LIBUSB_SUCCESS) return rc;
+    if (rc != LIBUSB_SUCCESS)
+        return rc;
 
     rc = libusb_hotplug_register_callback(s_libusb_ctx, LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED,
-                                          LIBUSB_HOTPLUG_ENUMERATE,
-                                          LIBUSB_HOTPLUG_MATCH_ANY,
-                                          LIBUSB_HOTPLUG_MATCH_ANY,
-                                          LIBUSB_HOTPLUG_MATCH_ANY,
+                                          LIBUSB_HOTPLUG_ENUMERATE, LIBUSB_HOTPLUG_MATCH_ANY,
+                                          LIBUSB_HOTPLUG_MATCH_ANY, LIBUSB_HOTPLUG_MATCH_ANY,
                                           on_device_added, NULL, NULL);
     if (LIBUSB_SUCCESS != rc) {
         libusb_exit(NULL);
@@ -252,10 +258,8 @@ static int lu_init(egc_event_cb event_handler)
     }
 
     rc = libusb_hotplug_register_callback(s_libusb_ctx, LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT,
-                                          LIBUSB_HOTPLUG_ENUMERATE,
-                                          LIBUSB_HOTPLUG_MATCH_ANY,
-                                          LIBUSB_HOTPLUG_MATCH_ANY,
-                                          LIBUSB_HOTPLUG_MATCH_ANY,
+                                          LIBUSB_HOTPLUG_ENUMERATE, LIBUSB_HOTPLUG_MATCH_ANY,
+                                          LIBUSB_HOTPLUG_MATCH_ANY, LIBUSB_HOTPLUG_MATCH_ANY,
                                           on_device_removed, NULL, NULL);
     if (LIBUSB_SUCCESS != rc) {
         libusb_exit(NULL);
@@ -280,7 +284,7 @@ static const egc_usb_devdesc_t *lu_get_device_descriptor(egc_input_device_t *inp
 
 static int lu_handle_events()
 {
-    struct timeval tv = { 0, 0};
+    struct timeval tv = { 0, 0 };
     libusb_handle_events_timeout_completed(s_libusb_ctx, &tv, NULL);
 
     /* Check for expired timers */
@@ -291,9 +295,11 @@ static int lu_handle_events()
         lu_device_t *device = &s_devices[i];
         if (device->pub.connection == EGC_CONNECTION_DISCONNECTED)
             continue;
-        if (device->timer_us <= 0) continue;
+        if (device->timer_us <= 0)
+            continue;
 
-        if (now < device->timer_us) continue;
+        if (now < device->timer_us)
+            continue;
 
         /* timer has expired, invoke the callback */
         bool keep = device->timer_callback(&device->pub);

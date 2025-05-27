@@ -40,9 +40,10 @@ const egc_usb_transfer_t *egc_device_driver_issue_ctrl_transfer_async(egc_input_
                                                                       void *data, u16 length,
                                                                       egc_transfer_cb callback)
 {
-    if (device->connection == EGC_CONNECTION_DISCONNECTED) return NULL;
+    if (device->connection == EGC_CONNECTION_DISCONNECTED)
+        return NULL;
     return _egc_platform_backend.usb.ctrl_transfer_async(device, requesttype, request, value, index,
-                                                data, length, callback);
+                                                         data, length, callback);
 }
 
 const egc_usb_transfer_t *egc_device_driver_issue_intr_transfer_async(egc_input_device_t *device,
@@ -50,7 +51,8 @@ const egc_usb_transfer_t *egc_device_driver_issue_intr_transfer_async(egc_input_
                                                                       u16 length,
                                                                       egc_transfer_cb callback)
 {
-    if (device->connection == EGC_CONNECTION_DISCONNECTED) return NULL;
+    if (device->connection == EGC_CONNECTION_DISCONNECTED)
+        return NULL;
     return _egc_platform_backend.usb.intr_transfer_async(device, endpoint, data, length, callback);
 }
 
@@ -112,7 +114,7 @@ int egc_input_device_suspend(egc_input_device_t *device)
     if (device->driver->disconnect)
         ret = device->driver->disconnect(device);
 
-    /* Suspend the device */
+        /* Suspend the device */
 #if 0
 	usb_hid_v5_suspend_resume(device->host_fd, device->dev_id, 0, 0);
 #endif
@@ -154,11 +156,13 @@ static int on_device_added(egc_input_device_t *device, u16 vid, u16 pid)
     device->driver = driver;
     if (driver->init) {
         int rc = driver->init(device, vid, pid);
-        if (rc < 0) return rc;
+        if (rc < 0)
+            return rc;
     }
 
     /* Inform the client */
-    if (s_device_added_cb) s_device_added_cb(device, s_callbacks_userdata);
+    if (s_device_added_cb)
+        s_device_added_cb(device, s_callbacks_userdata);
     return 0;
 }
 
@@ -167,7 +171,8 @@ static int on_device_removed(egc_input_device_t *device)
     int rc = 0;
 
     /* Inform the client */
-    if (s_device_removed_cb) s_device_removed_cb(device, s_callbacks_userdata);
+    if (s_device_removed_cb)
+        s_device_removed_cb(device, s_callbacks_userdata);
 
     if (device->driver->disconnect)
         rc = device->driver->disconnect(device);
@@ -192,9 +197,7 @@ static int event_handler(egc_input_device_t *device, egc_event_e event, ...)
     return rc;
 }
 
-int egc_initialize(egc_input_device_cb added_cb,
-                   egc_input_device_cb removed_cb,
-                   void *userdata)
+int egc_initialize(egc_input_device_cb added_cb, egc_input_device_cb removed_cb, void *userdata)
 {
     s_device_added_cb = added_cb;
     s_device_removed_cb = removed_cb;
@@ -207,8 +210,9 @@ int egc_initialize(egc_input_device_cb added_cb,
 int egc_input_device_set_suspended(egc_input_device_t *device, bool suspended)
 {
     if (device->connection == EGC_CONNECTION_USB) {
-        return _egc_platform_backend.usb.set_suspended ?
-            _egc_platform_backend.usb.set_suspended(device, suspended) : -1;
+        return _egc_platform_backend.usb.set_suspended
+                   ? _egc_platform_backend.usb.set_suspended(device, suspended)
+                   : -1;
     }
     return -1;
 }

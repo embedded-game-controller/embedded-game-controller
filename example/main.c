@@ -1,8 +1,8 @@
-#include "egc.h"
-
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#include "egc.h"
 
 #define MAX_DEVICES 4
 
@@ -96,25 +96,21 @@ static void print_status(egc_input_device_t *device)
 
 #define HAS_AXIS(x) (device->desc->available_axes & (1 << x))
     if (HAS_AXIS(EGC_GAMEPAD_AXIS_LEFTX)) {
-        printf("L stick: %d,%d ",
-               device->state.gamepad.axes[EGC_GAMEPAD_AXIS_LEFTX],
+        printf("L stick: %d,%d ", device->state.gamepad.axes[EGC_GAMEPAD_AXIS_LEFTX],
                device->state.gamepad.axes[EGC_GAMEPAD_AXIS_LEFTY]);
     }
 
     if (HAS_AXIS(EGC_GAMEPAD_AXIS_RIGHTX)) {
-        printf("R stick: %d,%d ",
-               device->state.gamepad.axes[EGC_GAMEPAD_AXIS_RIGHTX],
+        printf("R stick: %d,%d ", device->state.gamepad.axes[EGC_GAMEPAD_AXIS_RIGHTX],
                device->state.gamepad.axes[EGC_GAMEPAD_AXIS_RIGHTY]);
     }
 
     if (HAS_AXIS(EGC_GAMEPAD_AXIS_LEFT_TRIGGER)) {
-        printf("L trigger: %d ",
-               device->state.gamepad.axes[EGC_GAMEPAD_AXIS_LEFT_TRIGGER]);
+        printf("L trigger: %d ", device->state.gamepad.axes[EGC_GAMEPAD_AXIS_LEFT_TRIGGER]);
     }
 
     if (HAS_AXIS(EGC_GAMEPAD_AXIS_RIGHT_TRIGGER)) {
-        printf("R trigger: %d ",
-               device->state.gamepad.axes[EGC_GAMEPAD_AXIS_RIGHT_TRIGGER]);
+        printf("R trigger: %d ", device->state.gamepad.axes[EGC_GAMEPAD_AXIS_RIGHT_TRIGGER]);
     }
 
     if (device->desc->available_axes) {
@@ -128,15 +124,15 @@ static void on_device_added(egc_input_device_t *device, void *userdata)
     for (int i = 0; i < MAX_DEVICES; i++) {
         if (!s_devices[i]) {
             s_devices[i] = device;
-            printf("Added %04x:%04x on slot %d\n",
-                   device->desc->vendor_id, device->desc->product_id, i);
+            printf("Added %04x:%04x on slot %d\n", device->desc->vendor_id,
+                   device->desc->product_id, i);
             added = true;
             break;
         }
     }
     if (!added) {
-        fprintf(stderr, "No free device slots for %04x:%04x\n",
-                device->desc->vendor_id, device->desc->product_id);
+        fprintf(stderr, "No free device slots for %04x:%04x\n", device->desc->vendor_id,
+                device->desc->product_id);
     }
 }
 
@@ -146,14 +142,14 @@ static void on_device_removed(egc_input_device_t *device, void *userdata)
     for (int i = 0; i < MAX_DEVICES; i++) {
         if (s_devices[i] == device) {
             s_devices[i] = NULL;
-            printf("Removed %04x:%04x from slot %d\n",
-                   device->desc->vendor_id, device->desc->product_id, i);
+            printf("Removed %04x:%04x from slot %d\n", device->desc->vendor_id,
+                   device->desc->product_id, i);
             removed = true;
         }
     }
     if (!removed) {
-        fprintf(stderr, "Device %04x:%04x was not watched\n",
-                device->desc->vendor_id, device->desc->product_id);
+        fprintf(stderr, "Device %04x:%04x was not watched\n", device->desc->vendor_id,
+                device->desc->product_id);
     }
 }
 
@@ -167,7 +163,8 @@ int main(int argc, char **argv)
 
         for (int i = 0; i < MAX_DEVICES; i++) {
             egc_input_device_t *device = s_devices[i];
-            if (!device) continue;
+            if (!device)
+                continue;
 
             if (device->state.gamepad.buttons)
                 print_status(device);
