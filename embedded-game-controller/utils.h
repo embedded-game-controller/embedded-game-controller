@@ -26,10 +26,9 @@
 #define STRINGIFY(x) #x
 #define TOSTRING(x)  STRINGIFY(x)
 
-#ifdef assert
-#undef assert
+#ifndef NORETURN
+#define NORETURN __attribute__((noreturn))
 #endif
-#define assert(exp) ((exp) ? (void)0 : my_assert_func(__FILE__, __LINE__, __FUNCTION__, #exp))
 
 #define LOG_INFO(...) printf(__VA_ARGS__)
 #if DEBUG
@@ -38,7 +37,6 @@
 #define LOG_DEBUG(...) (void)0
 #endif
 
-extern void my_assert_func(const char *file, int line, const char *func, const char *failedexpr);
 
 static inline int memmismatch(const void *restrict a, const void *restrict b, int size)
 {
