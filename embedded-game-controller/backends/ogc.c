@@ -4,9 +4,9 @@
 
 #include "ipc.h"
 #include "ogc_arm.h"
+#include "platform.h"
 #include "syscalls.h"
 #include "usb.h"
-#include "platform.h"
 #include "utils.h"
 
 /* Maximum number of connected USB controllers. Increase this if needed. */
@@ -156,8 +156,7 @@ static inline ogc_device_t *ogc_device_from_input_device(egc_input_device_t *inp
 static inline ogc_device_t *get_usb_device_for_dev_id(u32 dev_id)
 {
     for (int i = 0; i < ARRAY_SIZE(s_devices); i++) {
-        if (s_devices[i].pub.connection == EGC_CONNECTION_USB &&
-            s_devices[i].usb.dev_id == dev_id)
+        if (s_devices[i].pub.connection == EGC_CONNECTION_USB && s_devices[i].usb.dev_id == dev_id)
             return &s_devices[i];
     }
 
@@ -641,9 +640,7 @@ static int ogc_handle_events()
         ogc_device_t *device = &s_devices[event->device_index];
 
         if (event->type == EGC_EVENT_DEVICE_ADDED) {
-            int ret = s_event_handler(&device->pub, event->type,
-                                      device->usb.vid,
-                                      device->usb.pid);
+            int ret = s_event_handler(&device->pub, event->type, device->usb.vid, device->usb.pid);
             if (ret != 0) {
                 usb_hid_v5_release(host_fd, device->usb.dev_id);
                 device->pub.connection = EGC_CONNECTION_DISCONNECTED;

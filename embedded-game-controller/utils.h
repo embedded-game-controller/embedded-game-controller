@@ -37,7 +37,6 @@
 #define LOG_DEBUG(...) (void)0
 #endif
 
-
 static inline int memmismatch(const void *restrict a, const void *restrict b, int size)
 {
     int i = 0;

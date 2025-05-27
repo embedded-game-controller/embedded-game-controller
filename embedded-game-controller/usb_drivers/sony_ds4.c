@@ -1,7 +1,7 @@
+#include <limits.h>
+
 #include "driver_api.h"
 #include "utils.h"
-
-#include <limits.h>
 
 #define SONY_VID 0x054c
 
@@ -150,6 +150,7 @@ static const egc_gamepad_button_e s_button_map[DS4_BUTTON_COUNT] = {
 static const egc_device_description_t s_device_description = {
     .vendor_id = SONY_VID,
     // Product ID is set dynamically
+    /* clang-format off */
     .available_buttons =
         BIT(EGC_GAMEPAD_BUTTON_DPAD_UP) |
         BIT(EGC_GAMEPAD_BUTTON_DPAD_DOWN) |
@@ -173,13 +174,13 @@ static const egc_device_description_t s_device_description = {
         BIT(EGC_GAMEPAD_AXIS_LEFTY) |
         BIT(EGC_GAMEPAD_AXIS_RIGHTX) |
         BIT(EGC_GAMEPAD_AXIS_RIGHTY),
+    /* clang-format on */
     .type = EGC_DEVICE_TYPE_GAMEPAD,
     .num_touch_points = 2,
     .num_leds = 4,
     .num_accelerometers = 1,
     .has_rumble = true,
 };
-
 
 static inline int ds4_request_data(egc_input_device_t *device);
 
@@ -259,7 +260,8 @@ static void ds4_request_data_cb(egc_usb_transfer_t *transfer)
 
     if (transfer->status == EGC_USB_TRANSFER_STATUS_COMPLETED && report->report_id == 0x01) {
         u32 buttons = ds4_get_buttons(report);
-        state.gamepad.buttons = egc_device_driver_map_buttons(buttons, DS4_BUTTON_COUNT, s_button_map);
+        state.gamepad.buttons =
+            egc_device_driver_map_buttons(buttons, DS4_BUTTON_COUNT, s_button_map);
 
         u8 axes[DS4_ANALOG_AXIS_COUNT];
         ds4_get_analog_axis(report, axes);
@@ -277,15 +279,19 @@ static void ds4_request_data_cb(egc_usb_transfer_t *transfer)
 #define MAP_TOUCH_X(v) ((v) * EGC_GAMEPAD_TOUCH_RES / DS4_TOUCHPAD_W)
 #define MAP_TOUCH_Y(v) ((v) * EGC_GAMEPAD_TOUCH_RES / DS4_TOUCHPAD_H)
         if (!report->finger1_nactive) {
-            state.gamepad.touch_points[0].x = MAP_TOUCH_X(report->finger1_x_lo | ((u16)report->finger1_x_hi << 8));
-            state.gamepad.touch_points[0].y = MAP_TOUCH_Y(report->finger1_y_lo | ((u16)report->finger1_y_hi << 4));
+            state.gamepad.touch_points[0].x =
+                MAP_TOUCH_X(report->finger1_x_lo | ((u16)report->finger1_x_hi << 8));
+            state.gamepad.touch_points[0].y =
+                MAP_TOUCH_Y(report->finger1_y_lo | ((u16)report->finger1_y_hi << 4));
         } else {
             state.gamepad.touch_points[0].x = -1;
         }
 
         if (!report->finger2_nactive) {
-            state.gamepad.touch_points[1].x = MAP_TOUCH_X(report->finger2_x_lo | ((u16)report->finger2_x_hi << 8));
-            state.gamepad.touch_points[1].y = MAP_TOUCH_Y(report->finger2_y_lo | ((u16)report->finger2_y_hi << 4));
+            state.gamepad.touch_points[1].x =
+                MAP_TOUCH_X(report->finger2_x_lo | ((u16)report->finger2_x_hi << 8));
+            state.gamepad.touch_points[1].y =
+                MAP_TOUCH_Y(report->finger2_y_lo | ((u16)report->finger2_y_hi << 4));
         } else {
             state.gamepad.touch_points[1].x = -1;
         }
@@ -353,7 +359,8 @@ int ds4_driver_ops_disconnect(egc_input_device_t *device)
 static inline void add_color_component(struct ds4_private_data_t *priv, int component, u8 value)
 {
     priv->led_color[component] += value;
-    if (priv->led_color[component] > 32) priv->led_color[component] = 32;
+    if (priv->led_color[component] > 32)
+        priv->led_color[component] = 32;
 }
 
 int ds4_driver_ops_set_leds(egc_input_device_t *device, u32 led_state)
@@ -378,7 +385,6 @@ int ds4_driver_ops_set_leds(egc_input_device_t *device, u32 led_state)
         add_color_component(priv, 0, 32);
         add_color_component(priv, 2, 32);
     }
-
 
     return ds4_driver_update_leds_rumble(device);
 }

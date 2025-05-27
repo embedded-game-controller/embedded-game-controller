@@ -138,6 +138,7 @@ static const egc_gamepad_button_e s_button_map[DS3_BUTTON_COUNT] = {
 static const egc_device_description_t s_device_description = {
     .vendor_id = SONY_VID,
     .product_id = 0x0268,
+    /* clang-format off */
     .available_buttons =
         BIT(EGC_GAMEPAD_BUTTON_DPAD_UP) |
         BIT(EGC_GAMEPAD_BUTTON_DPAD_DOWN) |
@@ -161,6 +162,7 @@ static const egc_device_description_t s_device_description = {
         BIT(EGC_GAMEPAD_AXIS_LEFTY) |
         BIT(EGC_GAMEPAD_AXIS_RIGHTX) |
         BIT(EGC_GAMEPAD_AXIS_RIGHTY),
+    /* clang-format on */
     .type = EGC_DEVICE_TYPE_GAMEPAD,
     .num_touch_points = 0,
     .num_leds = 4,
@@ -217,7 +219,8 @@ static void ds3_get_report_cb(egc_usb_transfer_t *transfer)
 
     if (transfer->status == EGC_USB_TRANSFER_STATUS_COMPLETED) {
         u32 buttons = ds3_get_buttons(report);
-        state.gamepad.buttons = egc_device_driver_map_buttons(buttons, DS3_BUTTON_COUNT, s_button_map);
+        state.gamepad.buttons =
+            egc_device_driver_map_buttons(buttons, DS3_BUTTON_COUNT, s_button_map);
 
         u8 axes[DS3_ANALOG_AXIS_COUNT];
         ds3_get_analog_axis(report, axes);

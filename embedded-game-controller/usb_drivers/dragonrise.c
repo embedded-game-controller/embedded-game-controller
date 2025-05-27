@@ -71,6 +71,7 @@ static const egc_gamepad_button_e s_button_map[DR_BUTTON_COUNT] = {
 static const egc_device_description_t s_device_description = {
     .vendor_id = 0x0079,
     .product_id = 0x0006,
+    /* clang-format off */
     .available_buttons =
         BIT(EGC_GAMEPAD_BUTTON_DPAD_UP) |
         BIT(EGC_GAMEPAD_BUTTON_DPAD_DOWN) |
@@ -93,6 +94,7 @@ static const egc_device_description_t s_device_description = {
         BIT(EGC_GAMEPAD_AXIS_LEFTY) |
         BIT(EGC_GAMEPAD_AXIS_RIGHTX) |
         BIT(EGC_GAMEPAD_AXIS_RIGHTY),
+    /* clang-format on */
     .type = EGC_DEVICE_TYPE_GAMEPAD,
     .num_touch_points = 0,
     .num_leds = 0,
@@ -150,7 +152,8 @@ static void intr_transfer_cb(egc_usb_transfer_t *transfer)
 
     if (transfer->status == EGC_USB_TRANSFER_STATUS_COMPLETED) {
         u32 buttons = dr_get_buttons(report);
-        state.gamepad.buttons = egc_device_driver_map_buttons(buttons, DR_BUTTON_COUNT, s_button_map);
+        state.gamepad.buttons =
+            egc_device_driver_map_buttons(buttons, DR_BUTTON_COUNT, s_button_map);
 
         u8 axes[DR_ANALOG_AXIS_COUNT];
         dr_get_analog_axis(report, axes);
