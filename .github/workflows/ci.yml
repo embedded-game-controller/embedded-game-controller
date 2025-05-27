@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "master"
+  pull_request:
+    branches:
+      - "master"
+
+jobs:
+  build-starlet:
+    name: Build for Starlet
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm:latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install g++
+        run: sudo apt-get update -y && sudo apt-get install g++ -y
+
+      - name: Configure
+        run: cmake -DCMAKE_TOOLCHAIN_FILE:FILEPATH=$DEVKITPRO/cmake/devkitARM.cmake -S . -B build
+
+      - name: Build
+        run: cmake --build build
+
+  build-desktop:
+    name: Build for Linux
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install compiler and dependencies
+        run: sudo apt-get update -y && sudo apt-get install build-essential cmake libusb-1.0-0-dev -y
+
+      - name: Configure
+        run: cmake -DBUILD_EXAMPLE=ON -S . -B build
+
+      - name: Build
+        run: cmake --build build
