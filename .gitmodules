@@ -1,0 +1,3 @@
+[submodule "embedded-game-controller/backends/ogc/libogc_orig"]
+	path = embedded-game-controller/backends/ogc/libogc_orig
+	url = https://github.com/devkitPro/libogc.git
