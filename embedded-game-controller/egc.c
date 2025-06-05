@@ -58,7 +58,9 @@ const egc_usb_transfer_t *egc_device_driver_issue_intr_transfer_async(egc_input_
 
 static bool timer_cb_wrapper(egc_input_device_t *device)
 {
-    bool keep = device->driver->timer ? device->driver->timer(device) : false;
+    bool keep = (device->connection != EGC_CONNECTION_DISCONNECTED && device->driver->timer)
+                    ? device->driver->timer(device)
+                    : false;
     return keep;
 }
 
