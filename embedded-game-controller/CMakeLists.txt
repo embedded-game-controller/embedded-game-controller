@@ -20,6 +20,7 @@ add_library(embedded-game-controller STATIC
     ${PLATFORM_SOURCES}
     egc.c
     usb_drivers/dragonrise.c
+    usb_drivers/nintendo_switch.c
     usb_drivers/sony_ds3.c
     usb_drivers/sony_ds4.c
 )
