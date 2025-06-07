@@ -12,6 +12,7 @@ static const egc_device_driver_t *usb_device_drivers[] = {
     &ds3_usb_device_driver,
     &ds4_usb_device_driver,
     &dr_usb_device_driver,
+    &ns_usb_device_driver,
 };
 
 static egc_input_device_cb s_device_added_cb = NULL;
