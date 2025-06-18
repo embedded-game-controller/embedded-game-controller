@@ -391,6 +391,10 @@ static bool queue_event(egc_event_e type, ogc_device_t *device)
 static void ogc_device_free(ogc_device_t *device)
 {
     device->pub.connection = EGC_CONNECTION_DISCONNECTED;
+    if (device->timer_id >= 0) {
+        os_destroy_timer(device->timer_id);
+        device->timer_id = -1;
+    }
     /* If the desc structure was allocated by us, free it */
     for (int i = 0; i < ARRAY_SIZE(s_device_descriptions); i++) {
         if (device->pub.desc == &s_device_descriptions[i]) {
