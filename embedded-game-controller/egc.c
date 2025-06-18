@@ -89,15 +89,16 @@ int egc_input_device_resume(egc_input_device_t *device)
 {
     LOG_DEBUG("%s\n", __func__);
 
-    if (device->suspended) {
+    if (!device->suspended)
+        return 0;
+
         /* FIXME: Doesn't work properly with DS3.
          * It doesn't report any data after suspend+resume... */
 #if 0
-		if (usb_hid_v5_suspend_resume(device->host_fd, device->dev_id, 1, 0) != IOS_OK)
-			return IOS_ENOENT;
+    if (usb_hid_v5_suspend_resume(device->host_fd, device->dev_id, 1, 0) != IOS_OK)
+        return IOS_ENOENT;
 #endif
-        device->suspended = false;
-    }
+    device->suspended = false;
 
     if (device->driver->init) {
         const egc_usb_devdesc_t *desc = _egc_platform_backend.usb.get_device_descriptor(device);
