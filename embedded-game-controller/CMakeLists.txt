@@ -6,6 +6,10 @@ if(CMAKE_SYSTEM_NAME MATCHES "Starlet")
         backends/ogc.c
         backends/ogc_arm.c
     )
+elseif(CMAKE_SYSTEM_NAME MATCHES "NintendoWii")
+    set(PLATFORM_SOURCES
+        backends/wii.c
+    )
 elseif(LIBUSB_FOUND)
     # Use the libusb backend
     set(PLATFORM_SOURCES
