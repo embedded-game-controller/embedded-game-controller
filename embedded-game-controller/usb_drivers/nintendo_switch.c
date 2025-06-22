@@ -377,7 +377,7 @@ static void on_request_completed(egc_usb_transfer_t *transfer)
             priv->update_count++;
         }
     } else if (transfer->status == EGC_USB_TRANSFER_STATUS_ERROR) {
-        LOG_INFO("%s, status = %d, length=%d\n", __func__, transfer->status, transfer->length);
+        LOG_DEBUG("%s, status = %d, length=%d\n", __func__, transfer->status, transfer->length);
     }
 
     ns_active_step(device);
