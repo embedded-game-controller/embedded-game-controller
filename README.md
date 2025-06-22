@@ -22,10 +22,30 @@ A static library for embedded devices to interact with Game Controllers over USB
 
 EGC can be built on the following platforms:
 
+- Nintendo Wii
 - Nintendo Wii's Starlet processor (cIOS)
 - Linux with libusb
 
 ## Compilation
+
+### Nintendo Wii
+
+##### 1) Install `devkitPPC`
+
+- Download and install [devkitPPC](https://devkitpro.org/wiki/Getting_Started)
+- Make sure to install the `devkitppc-cmake` package when using `pacman`
+
+##### 3) Build `libembedded-game-controller.a`
+
+1. `mkdir build && cd build`
+2. Configure it with CMake:
+  &ensp; `cmake CMAKE_TOOLCHAIN_FILE="$DEVKITPRO/cmake/Wii.cmake" -DBUILD_EXAMPLE=ON ..`
+3. `make` (or `ninja` if configured with `-G Ninja`)
+4. `libembedded-game-controller.a` will be generated
+
+I recommend passing `-DCMAKE_COLOR_DIAGNOSTICS:BOOL=TRUE`, especially when using Ninja.
+
+### For the Wii's Starlet processor
 
 ##### 1) Install `devkitARM`
 

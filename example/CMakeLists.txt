@@ -1,5 +1,6 @@
 add_executable(egc-example
     main.c
+    terminal.c
 )
 
 target_include_directories(egc-example PRIVATE
