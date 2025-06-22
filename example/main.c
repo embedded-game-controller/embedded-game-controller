@@ -4,6 +4,7 @@
 #include <unistd.h>
 
 #include "egc.h"
+#include "terminal.h"
 
 #define MAX_DEVICES 4
 
@@ -156,10 +157,16 @@ static void on_device_removed(egc_input_device_t *device, void *userdata)
 
 int main(int argc, char **argv)
 {
-    bool done = false;
+    quit_requested = false;
 
-    egc_initialize(on_device_added, on_device_removed, NULL);
-    while (!done) {
+    /* Some platforms need to perform some more steps before having the console
+     * output setup. */
+    terminal_init();
+
+    printf("Initializing...\n");
+    int rc = egc_initialize(on_device_added, on_device_removed, NULL);
+    printf("egc_initialize returned %d\n", rc);
+    while (!quit_requested) {
         egc_handle_events();
 
         for (int i = 0; i < MAX_DEVICES; i++) {
