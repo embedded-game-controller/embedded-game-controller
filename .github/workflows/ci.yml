@@ -30,6 +30,23 @@ jobs:
               exit 1
           fi
 
+  build-wii:
+    name: Build for Nintendo Wii
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitppc:latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install g++
+        run: sudo apt-get update -y && sudo apt-get install g++ -y
+
+      - name: Configure
+        run: cmake -DCMAKE_TOOLCHAIN_FILE="$DEVKITPRO/cmake/Wii.cmake" -DBUILD_EXAMPLE=ON -S . -B build
+
+      - name: Build
+        run: cmake --build build
+
   build-starlet:
     name: Build for Starlet
     runs-on: ubuntu-latest
