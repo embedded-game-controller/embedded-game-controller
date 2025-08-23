@@ -1,6 +1,7 @@
 #ifndef EGC_PLATFORM_H
 #define EGC_PLATFORM_H
 
+#include "bt_backend.h"
 #include "egc.h"
 #include "usb_backend.h"
 
@@ -15,7 +16,7 @@ typedef bool (*egc_timer_cb)(egc_input_device_t *device);
 
 typedef struct egc_platform_backend_t {
     egc_usb_backend_t usb;
-    /* TODO: add BT backend */
+    egc_bt_backend_t bt;
 
     /* Initializes the backend. The backend should call
      * egc_event_device_added() for each connected device. */

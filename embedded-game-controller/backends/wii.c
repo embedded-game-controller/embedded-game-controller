@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <bte/bte.h>
 #include <ogc/lwp.h>
 #include <ogc/machine/processor.h>
 #include <ogc/message.h>
@@ -6,6 +7,7 @@
 #include <ogc/system.h>
 #include <ogc/usb.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "platform.h"
@@ -374,10 +376,73 @@ static int update_device_list(void)
     return 0;
 }
 
+static s32 __wpad_read_remote_name_finished(s32 result,void *userdata)
+{
+    struct pad_name_info *info = (struct pad_name_info *)userdata;
+
+    if(result == ERR_OK && info != NULL) {
+        LOG_INFO("Bt device %02x:%02x:%02x:%02x:%02x:%02x name: %s\n",
+                 info->bdaddr.addr[0],
+                 info->bdaddr.addr[1],
+                 info->bdaddr.addr[2],
+                 info->bdaddr.addr[3],
+                 info->bdaddr.addr[4],
+                 info->bdaddr.addr[5],
+                 info->name);
+    }
+    if (info) free(info);
+    return ERR_OK;
+}
+
+static s32 bt_inquiry_done(s32 result,void *userdata)
+{
+    int i;
+    struct bte_inquiry_res *inq_res = (struct bte_inquiry_res *)userdata;
+
+    if (result == ERR_OK && inq_res != NULL) {
+        bool found = false;
+        // Filter out weird null values
+        for(i=0;i<inq_res->count;i++) {
+            struct inquiry_info_ex *info = &inq_res->info[i];
+
+            if(!bd_addr_cmp(&info->bdaddr,BD_ADDR_ANY)) {
+                LOG_INFO("Bt device %02x:%02x:%02x:%02x:%02x:%02x name: %02x:%02x:%02x\n",
+                         info->bdaddr.addr[0],
+                         info->bdaddr.addr[1],
+                         info->bdaddr.addr[2],
+                         info->bdaddr.addr[3],
+                         info->bdaddr.addr[4],
+                         info->bdaddr.addr[5],
+                         info->cod[0], info->cod[1], info->cod[2]);
+                found = true;
+                struct pad_name_info *padinfo = malloc(sizeof(*padinfo));
+                memset(padinfo, 0, sizeof(*padinfo));
+                // Read name of first valid device
+                bd_addr_set(&padinfo->bdaddr, &info->bdaddr);
+                BTE_ReadRemoteName(padinfo, __wpad_read_remote_name_finished);
+            }
+        }
+        if (!found) {
+            LOG_INFO("nothing found, count: %d\n", inq_res->count);
+        }
+    } else {
+        LOG_INFO("bt_inquiry_done: %d\n", result);
+    }
+
+    return ERR_OK;
+}
+
+static void search_bt_devices()
+{
+    LOG_INFO("starting inquiry\n");
+    BTE_PeriodicInquiry(255, true, bt_inquiry_done);
+}
+
 static void *worker_thread(void *unused)
 {
     bool done = false;
 
+    search_bt_devices();
     update_device_list();
 
     while (!done) {
@@ -437,6 +502,9 @@ static int wii_init(egc_event_cb event_handler)
     rc = USB_Initialize();
     if (rc != USB_OK)
         return -1;
+
+    /* This does not return an error code */
+    BTE_Init();
 
     rc = MQ_Init(&s_worker_queue, 10);
     if (rc != MQ_ERROR_SUCCESSFUL)

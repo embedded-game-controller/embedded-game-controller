@@ -1,0 +1,35 @@
+#ifndef EGC_BT_BACKEND_H
+#define EGC_BT_BACKEND_H
+
+/* The Bluetooth HID interface is nearly equivelent to the USB one. We include
+ * usb.h in order to reuse the protocol structures. */
+#include "usb.h"
+
+typedef struct egc_bt_backend_t egc_bt_backend_t;
+
+/* Interface for platform-specific BT backends. */
+struct egc_bt_backend_t {
+    /* This should immediately return, and just return a pointer to data
+     * already retrieved. */
+    const egc_usb_devdesc_t *(*get_device_descriptor)(egc_input_device_t *device);
+
+    /* This can be NULL if suspending is not supported */
+    int (*set_suspended)(egc_input_device_t *device, bool suspended);
+
+    /* Add methods to return descriptors for configurations, HID, endpoints,
+     * etc. - when needed. */
+
+    /* The egc_usb_transfer structure is allocated by the backend and freed
+     * after the callback has been invoked. */
+    const egc_usb_transfer_t *(*ctrl_transfer_async)(egc_input_device_t *device, u8 requesttype,
+                                                     u8 request, u16 value, u16 index, void *data,
+                                                     u16 length, egc_transfer_cb callback);
+    const egc_usb_transfer_t *(*intr_transfer_async)(egc_input_device_t *device, u8 endpoint,
+                                                     void *data, u16 length,
+                                                     egc_transfer_cb callback);
+    const egc_usb_transfer_t *(*bulk_transfer_async)(egc_input_device_t *device, u8 endpoint,
+                                                     void *data, u16 length,
+                                                     egc_transfer_cb callback);
+};
+
+#endif
