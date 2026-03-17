@@ -98,21 +98,11 @@ static egc_device_description_t s_device_descriptions[MAX_ACTIVE_DEVICES];
  * not called often enough, the queue might fill and events will be lost. */
 #define OGC_MAX_EVENTS 32
 
-typedef struct ogc_event_queue_t {
-    struct ogc_event_t {
-        egc_event_e type;
-        u8 device_index;
-    } ATTRIBUTE_PACKED events[OGC_MAX_EVENTS];
-    u8 current_index;
-} ATTRIBUTE_PACKED ogc_event_queue_t;
-static ogc_event_queue_t s_ogc_event_queue;
-
 static ogc_device_t s_devices[MAX_ACTIVE_DEVICES] ATTRIBUTE_ALIGN(32);
 static egc_usb_device_entry_t device_change_devices[USB_MAX_DEVICES] ATTRIBUTE_ALIGN(32);
 static ogc_transfer_t s_transfers[MAX_ACTIVE_TRANSFERS] ATTRIBUTE_ALIGN(32);
 static int host_fd = -1;
-static u8 worker_thread_stack[1024] ATTRIBUTE_ALIGN(32);
-static u32 queue_data[32] ATTRIBUTE_ALIGN(32);
+static u32 queue_data[OGC_MAX_EVENTS] ATTRIBUTE_ALIGN(32);
 static int queue_id = -1;
 static egc_event_cb s_event_handler;
 
@@ -371,21 +361,17 @@ static int ogc_report_input(egc_input_device_t *device, const egc_input_state_t 
     return 0;
 }
 
-static bool queue_event(egc_event_e type, ogc_device_t *device)
+static bool report_event(egc_event_e type, ogc_device_t *device)
 {
-    if (s_ogc_event_queue.current_index >= OGC_MAX_EVENTS) {
-        LOG_INFO("OGC event queue is full!");
-        return false;
+    bool ok = false;
+    if (type == EGC_EVENT_DEVICE_ADDED) {
+        int ret = s_event_handler(&device->pub, type, device->usb.vid, device->usb.pid);
+        ok = (ret == 0);
+    } else if (type == EGC_EVENT_DEVICE_REMOVED) {
+        s_event_handler(&device->pub, type);
+        ok = true;
     }
-
-    u8 device_index = device - s_devices;
-
-    enter_critical_section();
-    struct ogc_event_t *e = &s_ogc_event_queue.events[s_ogc_event_queue.current_index++];
-    e->type = type;
-    e->device_index = device_index;
-    leave_critical_section();
-    return true;
+    return ok;
 }
 
 static void ogc_device_free(ogc_device_t *device)
@@ -438,13 +424,8 @@ static void handle_device_change_reply(int host_fd, areply *reply)
                       " got disconnected\n",
                       device->usb.vid, device->usb.pid, device->usb.dev_id);
 
-            if (!queue_event(EGC_EVENT_DEVICE_REMOVED, device)) {
-                /* We normally mark the device as not valid only after the
-                 * client has retrieved the event, but since we couldn't add
-                 * the event into the queue, let's mark the device as available
-                 * here. */
-                ogc_device_free(device);
-            }
+            report_event(EGC_EVENT_DEVICE_REMOVED, device);
+            ogc_device_free(device);
         }
     }
 
@@ -493,7 +474,10 @@ static void handle_device_change_reply(int host_fd, areply *reply)
         device->timer_callback = NULL;
         device->pub.connection = EGC_CONNECTION_USB;
 
-        queue_event(EGC_EVENT_DEVICE_ADDED, device);
+        if (!report_event(EGC_EVENT_DEVICE_ADDED, device)) {
+            usb_hid_v5_release(host_fd, device->usb.dev_id);
+            device->pub.connection = EGC_CONNECTION_DISCONNECTED;
+        }
     }
 
     ret = os_ioctl_async(host_fd, USBV5_IOCTL_ATTACHFINISH, NULL, 0, NULL, 0, queue_id,
@@ -501,13 +485,12 @@ static void handle_device_change_reply(int host_fd, areply *reply)
     LOG_DEBUG("ioctl(ATTACHFINISH): %d\n", ret);
 }
 
-static int usb_hid_worker(void *arg)
+static int usb_hid_init()
 {
     u32 ver[8] ATTRIBUTE_ALIGN(32);
-    ogc_device_t *device;
     int ret;
 
-    LOG_DEBUG("usb_hid_worker thread started\n");
+    LOG_DEBUG("usb_hid_init\n");
 
     for (int i = 0; i < ARRAY_SIZE(s_devices); i++)
         s_devices[i].pub.connection = EGC_CONNECTION_DISCONNECTED;
@@ -529,13 +512,30 @@ static int usb_hid_worker(void *arg)
     ret = os_ioctl_async(host_fd, USBV5_IOCTL_GETDEVICECHANGE, NULL, 0, device_change_devices,
                          sizeof(device_change_devices), queue_id, MESSAGE_DEVCHANGE);
 
+    return ret;
+}
+
+static int process_queue(u32 timeout_us)
+{
+    ogc_device_t *device;
+    int ret;
+
+    s32 timer_id = -1;
+    u32 queue_flags;
+    if (timeout_us) {
+        timer_id = os_create_timer(timeout_us, 0, queue_id, (s32)&timer_id);
+        queue_flags = IOS_MESSAGE_BLOCK;
+    } else {
+        queue_flags = IOS_MESSAGE_NOBLOCK;
+    }
+
     while (1) {
         void *message;
 
         /* Wait for a message from USB devices */
-        ret = os_message_queue_receive(queue_id, &message, IOS_MESSAGE_BLOCK);
+        ret = os_message_queue_receive(queue_id, &message, queue_flags);
         if (ret != IOS_OK)
-            continue;
+            break;
 
         if (message == MESSAGE_DEVCHANGE) {
             handle_device_change_reply(host_fd, message);
@@ -543,6 +543,9 @@ static int usb_hid_worker(void *arg)
             ret =
                 os_ioctl_async(host_fd, USBV5_IOCTL_GETDEVICECHANGE, NULL, 0, device_change_devices,
                                sizeof(device_change_devices), queue_id, MESSAGE_DEVCHANGE);
+        } else if (message == &timer_id) {
+            /* Timer triggered, give up */
+            break;
         } else if ((areply *)message >= &s_transfers[0].reply &&
                    (areply *)message <= &s_transfers[ARRAY_SIZE(s_transfers) - 1].reply) {
             /* It's a transfer reply */
@@ -581,8 +584,15 @@ static int usb_hid_worker(void *arg)
                 }
             }
         }
+
+        /* If we got a message and have the timer set, don't iterate the loop again */
+        if (timer_id != -1)
+            break;
     }
 
+    if (timer_id != -1) {
+        os_destroy_timer(timer_id);
+    }
     return 0;
 }
 
@@ -597,12 +607,9 @@ static int ogc_init(egc_event_cb event_handler)
         return ret;
     queue_id = ret;
 
-    /* Worker USB HID thread that receives and dispatches async events */
-    ret = os_thread_create(usb_hid_worker, NULL, &worker_thread_stack[sizeof(worker_thread_stack)],
-                           sizeof(worker_thread_stack), 0, 0);
+    ret = usb_hid_init();
     if (ret < 0)
         return ret;
-    os_thread_continue(ret);
 
     return 0;
 }
@@ -631,33 +638,9 @@ static int ogc_set_suspended(egc_input_device_t *input_device, bool suspended)
     return usb_hid_v5_suspend_resume(device->usb.host_fd, device->usb.dev_id, !suspended);
 }
 
-static int ogc_handle_events()
+static int ogc_wait_events(u32 timeout_us)
 {
-    ogc_event_queue_t queue;
-    /* Create a copy of the queue to ensure it doesn't get modified while we
-     * process it */
-    enter_critical_section();
-    memcpy(&queue, &s_ogc_event_queue, sizeof(queue));
-    s_ogc_event_queue.current_index = 0; /* empty the queue */
-    leave_critical_section();
-
-    for (int i = 0; i < queue.current_index; i++) {
-        struct ogc_event_t *event = &queue.events[i];
-        ogc_device_t *device = &s_devices[event->device_index];
-
-        if (event->type == EGC_EVENT_DEVICE_ADDED) {
-            int ret = s_event_handler(&device->pub, event->type, device->usb.vid, device->usb.pid);
-            if (ret != 0) {
-                usb_hid_v5_release(host_fd, device->usb.dev_id);
-                device->pub.connection = EGC_CONNECTION_DISCONNECTED;
-            }
-        } else if (event->type == EGC_EVENT_DEVICE_REMOVED) {
-            s_event_handler(&device->pub, event->type);
-            /* Mark this device as not valid */
-            ogc_device_free(device);
-        }
-    }
-    return queue.current_index;
+    return process_queue(timeout_us);
 }
 
 const egc_platform_backend_t _egc_platform_backend = {
@@ -671,5 +654,5 @@ const egc_platform_backend_t _egc_platform_backend = {
     .alloc_desc = ogc_alloc_desc,
     .set_timer = ogc_set_timer,
     .report_input = ogc_report_input,
-    .handle_events = ogc_handle_events,
+    .wait_events = ogc_wait_events,
 };
