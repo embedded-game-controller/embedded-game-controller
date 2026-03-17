@@ -178,7 +178,7 @@ static int on_device_removed(egc_input_device_t *device)
     if (s_device_removed_cb)
         s_device_removed_cb(device, s_callbacks_userdata);
 
-    if (device->driver->disconnect)
+    if (device->driver && device->driver->disconnect)
         rc = device->driver->disconnect(device);
 
     return rc;

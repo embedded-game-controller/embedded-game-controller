@@ -140,6 +140,8 @@ static void on_device_added(egc_input_device_t *device, void *userdata)
 
 static void on_device_removed(egc_input_device_t *device, void *userdata)
 {
+    if (!device->desc) return;
+
     bool removed = false;
     for (int i = 0; i < MAX_DEVICES; i++) {
         if (s_devices[i] == device) {
