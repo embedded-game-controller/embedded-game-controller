@@ -145,5 +145,7 @@ int egc_input_device_set_suspended(egc_input_device_t *device, bool suspended);
 
 /* Fetch events and invoke callbacks. */
 int egc_handle_events(void);
+/* Fetch events and invoke callbacks. Wait up to \a timeout_us microseconds for new events. */
+int egc_wait_events(u32 timeout_us);
 
 #endif

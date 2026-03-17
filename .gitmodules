@@ -1,0 +1,3 @@
+[submodule "bt-embedded"]
+	path = bt-embedded
+	url = https://github.com/embedded-game-controller/bt-embedded.git

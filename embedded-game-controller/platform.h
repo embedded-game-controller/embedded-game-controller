@@ -31,7 +31,7 @@ typedef struct egc_platform_backend_t {
     int (*report_input)(egc_input_device_t *device, const egc_input_state_t *state);
 
     /* All callbacks should be invoked in the context of this call */
-    int (*handle_events)(void);
+    int (*wait_events)(u32 timeout_us);
 } egc_platform_backend_t;
 
 extern const egc_platform_backend_t _egc_platform_backend;

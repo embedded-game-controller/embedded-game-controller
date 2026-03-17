@@ -140,7 +140,8 @@ static void on_device_added(egc_input_device_t *device, void *userdata)
 
 static void on_device_removed(egc_input_device_t *device, void *userdata)
 {
-    if (!device->desc) return;
+    if (!device->desc)
+        return;
 
     bool removed = false;
     for (int i = 0; i < MAX_DEVICES; i++) {
@@ -169,7 +170,7 @@ int main(int argc, char **argv)
     int rc = egc_initialize(on_device_added, on_device_removed, NULL);
     printf("egc_initialize returned %d\n", rc);
     while (!quit_requested) {
-        egc_handle_events();
+        egc_wait_events(1000000);
 
         for (int i = 0; i < MAX_DEVICES; i++) {
             egc_input_device_t *device = s_devices[i];
@@ -179,7 +180,6 @@ int main(int argc, char **argv)
             if (device->state.gamepad.buttons)
                 print_status(device);
         }
-        usleep(1000);
     }
 
     return EXIT_SUCCESS;

@@ -282,15 +282,14 @@ static const egc_usb_devdesc_t *lu_get_device_descriptor(egc_input_device_t *inp
     return &device->usbdesc;
 }
 
-static int lu_handle_events()
+/* Invoke any expired timers and return the number of microseconds until the next trigger */
+static int64_t invoke_timers()
 {
-    struct timeval tv = { 0, 0 };
-    libusb_handle_events_timeout_completed(s_libusb_ctx, &tv, NULL);
-
-    /* Check for expired timers */
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     int64_t now = timespec_to_us(&ts);
+    int64_t min_timeout = INT64_MAX;
+
     for (int i = 0; i < ARRAY_SIZE(s_devices); i++) {
         lu_device_t *device = &s_devices[i];
         if (device->pub.connection == EGC_CONNECTION_DISCONNECTED)
@@ -298,8 +297,13 @@ static int lu_handle_events()
         if (device->timer_us <= 0)
             continue;
 
-        if (now < device->timer_us)
+        int64_t remaining_us = device->timer_us - now;
+        if (remaining_us > 0) {
+            if (remaining_us < min_timeout) {
+                min_timeout = remaining_us;
+            }
             continue;
+        }
 
         /* timer has expired, invoke the callback */
         bool keep = device->timer_callback(&device->pub);
@@ -311,7 +315,22 @@ static int lu_handle_events()
             device->repeat_timer_us = 0;
         }
     }
-    return 0;
+
+    return min_timeout;
+}
+
+static int lu_wait_events(u32 timeout_us)
+{
+    int64_t next_timer_us = invoke_timers();
+    if (next_timer_us < timeout_us)
+        timeout_us = next_timer_us;
+
+    int completed = 0;
+    struct timeval tv = { timeout_us / 1000000, timeout_us % 1000000 };
+    libusb_handle_events_timeout_completed(s_libusb_ctx, &tv, &completed);
+
+    invoke_timers();
+    return completed;
 }
 
 const egc_platform_backend_t _egc_platform_backend = {
@@ -324,5 +343,5 @@ const egc_platform_backend_t _egc_platform_backend = {
     .alloc_desc = lu_alloc_desc,
     .set_timer = lu_set_timer,
     .report_input = lu_report_input,
-    .handle_events = lu_handle_events,
+    .wait_events = lu_wait_events,
 };

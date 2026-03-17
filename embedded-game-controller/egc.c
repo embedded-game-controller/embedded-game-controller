@@ -223,5 +223,10 @@ int egc_input_device_set_suspended(egc_input_device_t *device, bool suspended)
 
 int egc_handle_events()
 {
-    return _egc_platform_backend.handle_events();
+    return _egc_platform_backend.wait_events(0);
+}
+
+int egc_wait_events(u32 timeout_us)
+{
+    return _egc_platform_backend.wait_events(timeout_us);
 }
