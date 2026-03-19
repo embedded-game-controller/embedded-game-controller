@@ -6,6 +6,7 @@ if(CMAKE_SYSTEM_NAME MATCHES "Starlet")
         backends/ogc.c
         backends/ogc_arm.c
     )
+    list(APPEND EXTRA_LIBS gcc)
 elseif(CMAKE_SYSTEM_NAME MATCHES "NintendoWii")
     set(PLATFORM_SOURCES
         backends/wii.c
@@ -39,5 +40,4 @@ target_link_options(embedded-game-controller PRIVATE
 
 target_link_libraries(embedded-game-controller PRIVATE
     ${EXTRA_LIBS}
-    gcc
 )
