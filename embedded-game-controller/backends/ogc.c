@@ -401,7 +401,7 @@ static void handle_device_change_reply(int host_fd, areply *reply)
     int ret;
     bool found;
 
-    LOG_DEBUG("Device change, #Attached devices: %" PRId32 "\n", reply->result);
+    EGC_DEBUG("#Attached devices: %" PRId32 "", reply->result);
 
     if (reply->result < 0)
         return;
@@ -423,8 +423,8 @@ static void handle_device_change_reply(int host_fd, areply *reply)
 
         /* Oops, it got disconnected */
         if (!found) {
-            LOG_DEBUG("Device with VID: 0x%04" PRIx16 ", PID: 0x%04" PRIx16 ", dev_id: 0x%" PRIx32
-                      " got disconnected\n",
+            EGC_DEBUG("Device with VID: 0x%04" PRIx16 ", PID: 0x%04" PRIx16 ", dev_id: 0x%" PRIx32
+                      " got disconnected",
                       device->usb.vid, device->usb.pid, device->usb.dev_id);
 
             report_event(EGC_EVENT_DEVICE_REMOVED, device);
@@ -437,8 +437,8 @@ static void handle_device_change_reply(int host_fd, areply *reply)
         vid = device_change_devices[i].vid;
         pid = device_change_devices[i].pid;
         dev_id = device_change_devices[i].device_id;
-        LOG_DEBUG("[%d] VID: 0x%04" PRIx16 ", PID: 0x%04" PRIx16 ", dev_id: 0x%" PRIx32 "\n", i,
-                  vid, pid, dev_id);
+        EGC_DEBUG("[%d] VID: 0x%04" PRIx16 ", PID: 0x%04" PRIx16 ", dev_id: 0x%" PRIx32, i, vid,
+                  pid, dev_id);
 
         /* Check if we already have that device (same dev_id) connected */
         if (is_usb_device_connected(dev_id))
@@ -485,7 +485,7 @@ static void handle_device_change_reply(int host_fd, areply *reply)
 
     ret = os_ioctl_async(host_fd, USBV5_IOCTL_ATTACHFINISH, NULL, 0, NULL, 0, queue_id,
                          MESSAGE_ATTACHFINISH);
-    LOG_DEBUG("ioctl(ATTACHFINISH): %d\n", ret);
+    EGC_DEBUG("ioctl(ATTACHFINISH): %d", ret);
 }
 
 static int usb_hid_init()
@@ -493,7 +493,7 @@ static int usb_hid_init()
     u32 ver[8] ATTRIBUTE_ALIGN(32);
     int ret;
 
-    LOG_DEBUG("usb_hid_init\n");
+    EGC_DEBUG("");
 
     for (int i = 0; i < ARRAY_SIZE(s_devices); i++)
         PUB(&s_devices[i])->connection = EGC_CONNECTION_DISCONNECTED;

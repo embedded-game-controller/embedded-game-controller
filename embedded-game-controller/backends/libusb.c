@@ -108,7 +108,7 @@ static const egc_usb_transfer_t *lu_ctrl_transfer_async(egc_input_device_t *inpu
     t->callback = callback;
     int rc = libusb_submit_transfer(t->usb);
     if (rc != LIBUSB_SUCCESS) {
-        LOG_INFO("Transfer failed: %d\n", rc);
+        EGC_WARN("Transfer failed: %d", rc);
         libusb_free_transfer(t->usb);
         free(t);
         return NULL;
@@ -149,7 +149,7 @@ static const egc_usb_transfer_t *lu_intr_transfer_async(egc_input_device_t *inpu
     t->callback = callback;
     int rc = libusb_submit_transfer(t->usb);
     if (rc != LIBUSB_SUCCESS) {
-        LOG_INFO("Transfer failed: %d\n", rc);
+        EGC_WARN("Transfer failed: %d", rc);
         libusb_free_transfer(t->usb);
         free(t);
         return NULL;
@@ -191,7 +191,7 @@ static int on_device_added(libusb_context *ctx, libusb_device *dev, libusb_hotpl
     if (rc != LIBUSB_SUCCESS)
         return 0;
 
-    LOG_DEBUG("Device attached: %04x:%04x\n", desc.idVendor, desc.idProduct);
+    EGC_DEBUG("Device attached: %04x:%04x", desc.idVendor, desc.idProduct);
 
     /* Get an empty device slot */
     device = get_free_device_slot();
@@ -205,7 +205,7 @@ static int on_device_added(libusb_context *ctx, libusb_device *dev, libusb_hotpl
     libusb_set_auto_detach_kernel_driver(device->handle, 1);
     rc = libusb_claim_interface(device->handle, 0);
     if (rc != LIBUSB_SUCCESS) {
-        LOG_INFO("Failed to claim USB interface (%d)\n", rc);
+        EGC_WARN("Failed to claim USB interface (%d)", rc);
         return 0;
     }
     memcpy(&device->usbdesc, &desc, sizeof(device->usbdesc));
@@ -225,7 +225,7 @@ static int on_device_removed(libusb_context *ctx, libusb_device *dev, libusb_hot
 {
     lu_device_t *device;
 
-    LOG_DEBUG("Device removed\n");
+    EGC_DEBUG("Device removed");
     for (int i = 0; i < ARRAY_SIZE(s_devices); i++) {
         device = &s_devices[i];
         if (PUB(device)->connection == EGC_CONNECTION_USB &&

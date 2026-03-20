@@ -287,9 +287,9 @@ static int update_device_list(void)
 
         /* Oops, it got disconnected */
         if (!found) {
-            LOG_INFO("Device with VID: 0x%04" PRIx16 ", PID: 0x%04" PRIx16 ", dev_id: 0x%" PRIx32
-                     " got disconnected\n",
-                     device->usb.dev.vid, device->usb.dev.pid, device->usb.dev.device_id);
+            EGC_DEBUG("Device with VID: 0x%04" PRIx16 ", PID: 0x%04" PRIx16 ", dev_id: 0x%" PRIx32
+                      " got disconnected",
+                      device->usb.dev.vid, device->usb.dev.pid, device->usb.dev.device_id);
 
             if (!report_event(WII_EVENT_DEVICE_REMOVED, device)) {
                 /* We normally mark the device as not valid only after the
@@ -306,8 +306,8 @@ static int update_device_list(void)
         u16 vid = devlist[i].vid;
         u16 pid = devlist[i].pid;
         s32 dev_id = devlist[i].device_id;
-        LOG_INFO("[%d] VID: 0x%04" PRIx16 ", PID: 0x%04" PRIx16 ", dev_id: 0x%" PRIx32 "\n", i, vid,
-                 pid, dev_id);
+        EGC_DEBUG("[%d] VID: 0x%04" PRIx16 ", PID: 0x%04" PRIx16 ", dev_id: 0x%" PRIx32, i, vid,
+                  pid, dev_id);
 
         /* Check if we already have that device (same dev_id) connected */
         if (is_usb_device_connected(dev_id))
@@ -397,7 +397,7 @@ static int process_events(u32 timeout_us)
                 }
             }
         } else {
-            LOG_INFO("%s:%d\n", __func__, __LINE__);
+            EGC_DEBUG("");
             /* Find if this is a timer */
             for (int i = 0; i < ARRAY_SIZE(s_devices); i++) {
                 wii_device_t *device = &s_devices[i];
@@ -405,7 +405,7 @@ static int process_events(u32 timeout_us)
                     continue;
                 if (message == (uptr)&device->timer_task) {
                     count++;
-                    LOG_INFO("%s:%d timer on %p\n", __func__, __LINE__, device);
+                    EGC_DEBUG("timer on %p", device);
                     bool keep = device->timer_callback(PUB(device));
                     if (!keep) {
                         KTickTaskStop(&device->timer_task);

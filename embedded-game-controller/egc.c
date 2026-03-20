@@ -92,7 +92,7 @@ int egc_input_device_resume(egc_input_device_t *device)
 {
     egc_device_priv_t *priv = get_priv(device);
 
-    LOG_DEBUG("%s\n", __func__);
+    EGC_DEBUG("");
 
     if (!device->suspended)
         return 0;
@@ -118,7 +118,7 @@ int egc_input_device_suspend(egc_input_device_t *device)
     egc_device_priv_t *priv = get_priv(device);
     int ret = 0;
 
-    LOG_DEBUG("%s\n", __func__);
+    EGC_DEBUG("");
 
     if (priv->driver->disconnect)
         ret = priv->driver->disconnect(device);
@@ -136,7 +136,7 @@ int egc_input_device_set_leds(egc_input_device_t *device, u32 led_state)
 {
     egc_device_priv_t *priv = get_priv(device);
 
-    LOG_DEBUG("%s\n", __func__);
+    EGC_DEBUG("");
 
     if (priv->driver->set_leds)
         return priv->driver->set_leds(device, led_state);
@@ -148,7 +148,7 @@ int egc_input_device_set_rumble(egc_input_device_t *device, u32 intensity)
 {
     egc_device_priv_t *priv = get_priv(device);
 
-    LOG_DEBUG("%s\n", __func__);
+    EGC_DEBUG("");
 
     if (priv->driver->set_rumble)
         return priv->driver->set_rumble(device, intensity > 0);

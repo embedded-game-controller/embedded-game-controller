@@ -30,11 +30,17 @@
 #define NORETURN __attribute__((noreturn))
 #endif
 
-#define LOG_INFO(...) printf(__VA_ARGS__)
-#if DEBUG
-#define LOG_DEBUG(...) printf(__VA_ARGS__)
+#define EGC_WITH_DEBUG
+
+#ifndef EGC_LOG
+#define EGC_LOG(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
+#endif
+
+#define EGC_WARN(fmt, ...) EGC_LOG("[W] " fmt "\n", ##__VA_ARGS__)
+#ifdef EGC_WITH_DEBUG
+#define EGC_DEBUG(fmt, ...) EGC_LOG("[D] %s:%d: " fmt "\n", __func__, __LINE__, ##__VA_ARGS__)
 #else
-#define LOG_DEBUG(...) (void)0
+#define EGC_DEBUG(fmt, ...) (void)0
 #endif
 
 static inline int memmismatch(const void *restrict a, const void *restrict b, int size)

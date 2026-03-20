@@ -354,7 +354,7 @@ static bool parse_input_report(const struct ns_private_data_t *priv,
                                const ns_input_report_t *report, struct egc_input_state_t *state)
 {
     if (report->id != JC_INPUT_IMU_DATA && report->id != 0) {
-        LOG_INFO("  report ID: %02x\n", report->id);
+        EGC_WARN("report ID: %02x", report->id);
         return false;
     }
     u32 buttons = ns_get_buttons(report->button_status);
@@ -378,7 +378,7 @@ static void on_request_completed(egc_usb_transfer_t *transfer)
             priv->update_count++;
         }
     } else if (transfer->status == EGC_USB_TRANSFER_STATUS_ERROR) {
-        LOG_DEBUG("%s, status = %d, length=%d\n", __func__, transfer->status, transfer->length);
+        EGC_DEBUG("status = %d, length=%d", transfer->status, transfer->length);
     }
 
     ns_active_step(device);
@@ -389,7 +389,7 @@ static int ns_request_data(egc_input_device_t *device)
     const egc_usb_transfer_t *transfer = egc_device_driver_issue_intr_transfer_async(
         device, EGC_USB_ENDPOINT_IN | 1, NULL, 0, on_request_completed);
     if (!transfer) {
-        LOG_INFO("Couldn't get a transfer!\n");
+        EGC_WARN("Couldn't get a transfer!");
     }
     return transfer != NULL ? 0 : -1;
 }
@@ -504,7 +504,7 @@ static void ns_init_step_read_data_reply(egc_usb_transfer_t *transfer)
                 ns_copy_u16_from_le((u16 *)&priv->imu_cal, (u16 *)factory_cal,
                                     sizeof(ns_joycon_imu_cal_t) / sizeof(u16));
             } else {
-                LOG_DEBUG("Got SPI address: %04x\n",
+                EGC_DEBUG("Got SPI address: %04x",
                           (int)le16toh(report->subcmd_reply.spi_reply.req.addr));
             }
         }
