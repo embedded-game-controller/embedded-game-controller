@@ -1,7 +1,7 @@
 #ifndef EGC_PLATFORM_H
 #define EGC_PLATFORM_H
 
-#include "egc.h"
+#include "internals.h"
 #include "usb_backend.h"
 
 typedef enum egc_event_e {

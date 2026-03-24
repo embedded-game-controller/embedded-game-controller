@@ -33,7 +33,8 @@ typedef struct {
 
 typedef struct {
     /* This must be the first member, since we use it for casting */
-    egc_input_device_t pub;
+    egc_device_priv_t priv;
+
     union {
         egc_usb_device_t usb;
         // TODO: add bluetooth data here
@@ -42,6 +43,8 @@ typedef struct {
     KTickTask timer_task;
     egc_timer_cb timer_callback;
 } wii_device_t;
+
+#define PUB(d) (&(d)->priv.pub)
 
 typedef struct {
     u8 buffer[128] ATTRIBUTE_ALIGN(32);
@@ -80,7 +83,7 @@ static inline wii_device_t *wii_device_from_input_device(egc_input_device_t *inp
 static inline wii_device_t *get_usb_device_for_dev_id(s32 dev_id)
 {
     for (int i = 0; i < ARRAY_SIZE(s_devices); i++) {
-        if (s_devices[i].pub.connection == EGC_CONNECTION_USB &&
+        if (PUB(&s_devices[i])->connection == EGC_CONNECTION_USB &&
             s_devices[i].usb.dev.device_id == dev_id)
             return &s_devices[i];
     }
@@ -91,7 +94,7 @@ static inline wii_device_t *get_usb_device_for_dev_id(s32 dev_id)
 static inline wii_device_t *get_free_device_slot(void)
 {
     for (int i = 0; i < ARRAY_SIZE(s_devices); i++) {
-        if (s_devices[i].pub.connection == EGC_CONNECTION_DISCONNECTED)
+        if (PUB(&s_devices[i])->connection == EGC_CONNECTION_DISCONNECTED)
             return &s_devices[i];
     }
 
@@ -216,17 +219,17 @@ static int wii_set_timer(egc_input_device_t *input_device, int time_us, int repe
 static bool report_event(wii_event_e type, wii_device_t *device)
 {
     if (type == WII_EVENT_DEVICE_ADDED) {
-        int ret = s_event_handler(&device->pub, EGC_EVENT_DEVICE_ADDED, device->usb.dev.vid,
+        int ret = s_event_handler(PUB(device), EGC_EVENT_DEVICE_ADDED, device->usb.dev.vid,
                                   device->usb.dev.pid);
         if (ret != 0) {
             wii_device_free(device);
         }
     } else if (type == WII_EVENT_DEVICE_REMOVED) {
-        s_event_handler(&device->pub, EGC_EVENT_DEVICE_REMOVED);
+        s_event_handler(PUB(device), EGC_EVENT_DEVICE_REMOVED);
         /* Mark this device as not valid */
         wii_device_free(device);
     } else if (type == WII_EVENT_GOT_INPUT) {
-        memcpy(&device->pub.state, &device->next_input, sizeof(device->next_input));
+        memcpy(&PUB(device)->state, &device->next_input, sizeof(device->next_input));
     }
     return true;
 }
@@ -237,10 +240,10 @@ static void wii_device_free(wii_device_t *device)
         USB_CloseDevice(&device->usb.fd);
     }
 
-    device->pub.connection = EGC_CONNECTION_DISCONNECTED;
+    PUB(device)->connection = EGC_CONNECTION_DISCONNECTED;
     /* If the desc structure was allocated by us, free it */
     for (int i = 0; i < ARRAY_SIZE(s_device_descriptions); i++) {
-        if (device->pub.desc == &s_device_descriptions[i]) {
+        if (PUB(device)->desc == &s_device_descriptions[i]) {
             memset(&s_device_descriptions[i], 0, sizeof(egc_device_description_t));
             break;
         }
@@ -270,12 +273,12 @@ static int update_device_list(void)
     /* First look for disconnections */
     for (int i = 0; i < ARRAY_SIZE(s_devices); i++) {
         device = &s_devices[i];
-        if (device->pub.connection == EGC_CONNECTION_DISCONNECTED)
+        if (PUB(device)->connection == EGC_CONNECTION_DISCONNECTED)
             continue;
 
         bool found = false;
         for (int j = 0; j < count; j++) {
-            if (device->pub.connection == EGC_CONNECTION_USB &&
+            if (PUB(device)->connection == EGC_CONNECTION_USB &&
                 device->usb.dev.device_id == devlist[j].device_id) {
                 found = true;
                 break;
@@ -332,7 +335,7 @@ static int update_device_list(void)
         /* We have ownership, populate the device info */
         memset(&device->timer_task, 0, sizeof(device->timer_task));
         device->timer_callback = NULL;
-        device->pub.connection = EGC_CONNECTION_USB;
+        PUB(device)->connection = EGC_CONNECTION_USB;
 
         report_event(WII_EVENT_DEVICE_ADDED, device);
     }
@@ -398,12 +401,12 @@ static int process_events(u32 timeout_us)
             /* Find if this is a timer */
             for (int i = 0; i < ARRAY_SIZE(s_devices); i++) {
                 wii_device_t *device = &s_devices[i];
-                if (device->pub.connection == EGC_CONNECTION_DISCONNECTED)
+                if (PUB(device)->connection == EGC_CONNECTION_DISCONNECTED)
                     continue;
                 if (message == (uptr)&device->timer_task) {
                     count++;
                     LOG_INFO("%s:%d timer on %p\n", __func__, __LINE__, device);
-                    bool keep = device->timer_callback(&device->pub);
+                    bool keep = device->timer_callback(PUB(device));
                     if (!keep) {
                         KTickTaskStop(&device->timer_task);
                     }
@@ -431,7 +434,7 @@ static int wii_init(egc_event_cb event_handler)
     KMailboxPrepare(&s_worker_queue, s_worker_queue_slots, ARRAY_SIZE(s_worker_queue_slots));
 
     for (int i = 0; i < ARRAY_SIZE(s_devices); i++)
-        s_devices[i].pub.connection = EGC_CONNECTION_DISCONNECTED;
+        PUB(&s_devices[i])->connection = EGC_CONNECTION_DISCONNECTED;
 
     return update_device_list();
 }

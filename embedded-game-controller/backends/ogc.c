@@ -68,7 +68,7 @@ typedef struct {
 
 typedef struct {
     /* This must be the first member, since we use it for casting */
-    egc_input_device_t pub;
+    egc_device_priv_t priv;
     union {
         egc_usb_device_t usb;
         // TODO: add bluetooth data here
@@ -77,6 +77,8 @@ typedef struct {
     int timer_id;
     egc_timer_cb timer_callback;
 } ogc_device_t;
+
+#define PUB(d) (&(d)->priv.pub)
 
 typedef struct egc_usb_device_entry_t {
     s32 device_id;
@@ -146,7 +148,8 @@ static inline ogc_device_t *ogc_device_from_input_device(egc_input_device_t *inp
 static inline ogc_device_t *get_usb_device_for_dev_id(u32 dev_id)
 {
     for (int i = 0; i < ARRAY_SIZE(s_devices); i++) {
-        if (s_devices[i].pub.connection == EGC_CONNECTION_USB && s_devices[i].usb.dev_id == dev_id)
+        if (PUB(&s_devices[i])->connection == EGC_CONNECTION_USB &&
+            s_devices[i].usb.dev_id == dev_id)
             return &s_devices[i];
     }
 
@@ -156,7 +159,7 @@ static inline ogc_device_t *get_usb_device_for_dev_id(u32 dev_id)
 static inline ogc_device_t *get_free_device_slot(void)
 {
     for (int i = 0; i < ARRAY_SIZE(s_devices); i++) {
-        if (s_devices[i].pub.connection == EGC_CONNECTION_DISCONNECTED)
+        if (PUB(&s_devices[i])->connection == EGC_CONNECTION_DISCONNECTED)
             return &s_devices[i];
     }
 
@@ -365,10 +368,10 @@ static bool report_event(egc_event_e type, ogc_device_t *device)
 {
     bool ok = false;
     if (type == EGC_EVENT_DEVICE_ADDED) {
-        int ret = s_event_handler(&device->pub, type, device->usb.vid, device->usb.pid);
+        int ret = s_event_handler(PUB(device), type, device->usb.vid, device->usb.pid);
         ok = (ret == 0);
     } else if (type == EGC_EVENT_DEVICE_REMOVED) {
-        s_event_handler(&device->pub, type);
+        s_event_handler(PUB(device), type);
         ok = true;
     }
     return ok;
@@ -376,14 +379,14 @@ static bool report_event(egc_event_e type, ogc_device_t *device)
 
 static void ogc_device_free(ogc_device_t *device)
 {
-    device->pub.connection = EGC_CONNECTION_DISCONNECTED;
+    PUB(device)->connection = EGC_CONNECTION_DISCONNECTED;
     if (device->timer_id >= 0) {
         os_destroy_timer(device->timer_id);
         device->timer_id = -1;
     }
     /* If the desc structure was allocated by us, free it */
     for (int i = 0; i < ARRAY_SIZE(s_device_descriptions); i++) {
-        if (device->pub.desc == &s_device_descriptions[i]) {
+        if (PUB(device)->desc == &s_device_descriptions[i]) {
             memset(&s_device_descriptions[i], 0, sizeof(egc_device_description_t));
             break;
         }
@@ -406,12 +409,12 @@ static void handle_device_change_reply(int host_fd, areply *reply)
     /* First look for disconnections */
     for (int i = 0; i < ARRAY_SIZE(s_devices); i++) {
         device = &s_devices[i];
-        if (device->pub.connection == EGC_CONNECTION_DISCONNECTED)
+        if (PUB(device)->connection == EGC_CONNECTION_DISCONNECTED)
             continue;
 
         found = false;
         for (int j = 0; j < reply->result; j++) {
-            if (device->pub.connection == EGC_CONNECTION_USB &&
+            if (PUB(device)->connection == EGC_CONNECTION_USB &&
                 device->usb.dev_id == device_change_devices[j].device_id) {
                 found = true;
                 break;
@@ -472,11 +475,11 @@ static void handle_device_change_reply(int host_fd, areply *reply)
         device->usb.dev_id = dev_id;
         device->timer_id = -1;
         device->timer_callback = NULL;
-        device->pub.connection = EGC_CONNECTION_USB;
+        PUB(device)->connection = EGC_CONNECTION_USB;
 
         if (!report_event(EGC_EVENT_DEVICE_ADDED, device)) {
             usb_hid_v5_release(host_fd, device->usb.dev_id);
-            device->pub.connection = EGC_CONNECTION_DISCONNECTED;
+            PUB(device)->connection = EGC_CONNECTION_DISCONNECTED;
         }
     }
 
@@ -493,7 +496,7 @@ static int usb_hid_init()
     LOG_DEBUG("usb_hid_init\n");
 
     for (int i = 0; i < ARRAY_SIZE(s_devices); i++)
-        s_devices[i].pub.connection = EGC_CONNECTION_DISCONNECTED;
+        PUB(&s_devices[i])->connection = EGC_CONNECTION_DISCONNECTED;
 
     /* USB_HID supports 16 handles, libogc uses handle 0, so we use handle 15...*/
     ret = os_open("/dev/usb/hid", 15);
@@ -573,10 +576,10 @@ static int process_queue(u32 timeout_us)
             /* Find if this is a timer */
             for (int i = 0; i < ARRAY_SIZE(s_devices); i++) {
                 device = &s_devices[i];
-                if (device->pub.connection == EGC_CONNECTION_DISCONNECTED)
+                if (PUB(device)->connection == EGC_CONNECTION_DISCONNECTED)
                     continue;
                 if (message == &device->timer_id) {
-                    bool keep = device->timer_callback(&device->pub);
+                    bool keep = device->timer_callback(PUB(device));
                     if (!keep) {
                         os_destroy_timer(device->timer_id);
                         device->timer_id = -1;

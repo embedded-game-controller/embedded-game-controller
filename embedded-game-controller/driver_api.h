@@ -1,7 +1,7 @@
 #ifndef EGC_DRIVER_API_H
 #define EGC_DRIVER_API_H
 
-#include "egc.h"
+#include "internals.h"
 #include "usb.h"
 
 typedef struct egc_input_device_t egc_input_device_t;

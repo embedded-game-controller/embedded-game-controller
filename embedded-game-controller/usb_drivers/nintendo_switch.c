@@ -274,7 +274,8 @@ struct ns_private_data_t {
     bool led_change_queued;
     bool requested_rumble;
 };
-static_assert(sizeof(struct ns_private_data_t) <= EGC_INPUT_DEVICE_PRIVATE_DATA_SIZE);
+static_assert(sizeof(struct ns_private_data_t) <= EGC_INPUT_DEVICE_DRIVER_DATA_SIZE);
+#define PRIV(input_device) ((struct ns_private_data_t *)get_priv(input_device)->private_data)
 
 static const egc_device_description_t s_device_description = {
     .vendor_id = 0x057e,
@@ -368,7 +369,7 @@ static void on_request_completed(egc_usb_transfer_t *transfer)
 {
     egc_input_device_t *device = transfer->device;
     ns_input_report_t *report = (void *)transfer->data;
-    struct ns_private_data_t *priv = (void *)device->private_data;
+    struct ns_private_data_t *priv = PRIV(device);
     struct egc_input_state_t state = { 0 };
 
     if (transfer->status == EGC_USB_TRANSFER_STATUS_COMPLETED && transfer->length > 0) {
@@ -415,7 +416,7 @@ static int ns_send_command_usb(egc_input_device_t *device, u8 command, egc_trans
 static int ns_send_subcmd(egc_input_device_t *device, struct ns_subcmd_request *req, int size,
                           egc_transfer_cb callback)
 {
-    struct ns_private_data_t *priv = (void *)device->private_data;
+    struct ns_private_data_t *priv = PRIV(device);
 
     req->output_id = JC_OUTPUT_RUMBLE_AND_SUBCMD;
     req->packet_num = priv->next_packet_num;
@@ -459,7 +460,7 @@ static int ns_set_player_leds(egc_input_device_t *device, u8 flash, u8 on)
 
 void ns_active_step(egc_input_device_t *device)
 {
-    struct ns_private_data_t *priv = (void *)device->private_data;
+    struct ns_private_data_t *priv = PRIV(device);
 
     if (priv->led_change_queued) {
         ns_set_player_leds(device, 0, priv->requested_leds);
@@ -482,7 +483,7 @@ static void ns_copy_u16_from_le(u16 *dst, const u16 *src, size_t count)
 static void ns_init_step_read_data_reply(egc_usb_transfer_t *transfer)
 {
     egc_input_device_t *device = transfer->device;
-    struct ns_private_data_t *priv = (void *)device->private_data;
+    struct ns_private_data_t *priv = PRIV(device);
 
     const ns_coded_command_t *step = &s_initialization_commands[priv->init_state];
     if (step->type == NS_CODED_CAL) {
@@ -553,7 +554,7 @@ static inline void ns_prepare_calibration(struct ns_private_data_t *priv)
 
 static int ns_init_step(egc_input_device_t *device)
 {
-    struct ns_private_data_t *priv = (void *)device->private_data;
+    struct ns_private_data_t *priv = PRIV(device);
     int rc;
 
     priv->init_state++;
@@ -606,7 +607,7 @@ static bool ns_driver_ops_probe(u16 vid, u16 pid)
 
 static int ns_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
 {
-    struct ns_private_data_t *priv = (void *)device->private_data;
+    struct ns_private_data_t *priv = PRIV(device);
 
     device->desc = &s_device_description;
 
@@ -630,7 +631,7 @@ static int ns_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
 
 static int ns_driver_ops_set_leds(egc_input_device_t *device, u32 leds)
 {
-    struct ns_private_data_t *priv = (void *)device->private_data;
+    struct ns_private_data_t *priv = PRIV(device);
 
     priv->requested_leds = leds;
     priv->led_change_queued = true;
@@ -639,7 +640,7 @@ static int ns_driver_ops_set_leds(egc_input_device_t *device, u32 leds)
 
 static int ns_driver_ops_set_rumble(egc_input_device_t *device, bool rumble_on)
 {
-    struct ns_private_data_t *priv = (void *)device->private_data;
+    struct ns_private_data_t *priv = PRIV(device);
     if (rumble_on != priv->requested_rumble) {
         priv->requested_rumble = rumble_on;
     }

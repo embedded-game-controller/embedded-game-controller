@@ -13,7 +13,7 @@
 
 typedef struct {
     /* This must be the first member, since we use it for casting */
-    egc_input_device_t pub;
+    egc_device_priv_t priv;
     libusb_device_handle *handle;
     egc_device_description_t desc;
     egc_usb_devdesc_t usbdesc;
@@ -22,6 +22,8 @@ typedef struct {
     int64_t repeat_timer_us;
     egc_timer_cb timer_callback;
 } lu_device_t;
+
+#define PUB(d) (&(d)->priv.pub)
 
 typedef struct {
     egc_usb_transfer_t t;
@@ -57,7 +59,7 @@ static int64_t timespec_to_us(const struct timespec *ts)
 static inline lu_device_t *get_free_device_slot(void)
 {
     for (int i = 0; i < ARRAY_SIZE(s_devices); i++) {
-        if (s_devices[i].pub.connection == EGC_CONNECTION_DISCONNECTED)
+        if (PUB(&s_devices[i])->connection == EGC_CONNECTION_DISCONNECTED)
             return &s_devices[i];
     }
 
@@ -212,9 +214,9 @@ static int on_device_added(libusb_context *ctx, libusb_device *dev, libusb_hotpl
     device->timer_us = 0;
     device->repeat_timer_us = 0;
     device->timer_callback = NULL;
-    device->pub.connection = EGC_CONNECTION_USB;
+    PUB(device)->connection = EGC_CONNECTION_USB;
 
-    s_event_handler(&device->pub, EGC_EVENT_DEVICE_ADDED, desc.idVendor, desc.idProduct);
+    s_event_handler(PUB(device), EGC_EVENT_DEVICE_ADDED, desc.idVendor, desc.idProduct);
     return 0;
 }
 
@@ -226,12 +228,12 @@ static int on_device_removed(libusb_context *ctx, libusb_device *dev, libusb_hot
     LOG_DEBUG("Device removed\n");
     for (int i = 0; i < ARRAY_SIZE(s_devices); i++) {
         device = &s_devices[i];
-        if (device->pub.connection == EGC_CONNECTION_USB &&
+        if (PUB(device)->connection == EGC_CONNECTION_USB &&
             libusb_get_device(device->handle) == dev) {
-            s_event_handler(&device->pub, EGC_EVENT_DEVICE_REMOVED);
+            s_event_handler(PUB(device), EGC_EVENT_DEVICE_REMOVED);
             libusb_close(device->handle);
             device->handle = NULL;
-            device->pub.connection = EGC_CONNECTION_DISCONNECTED;
+            PUB(device)->connection = EGC_CONNECTION_DISCONNECTED;
             break;
         }
     }
@@ -292,7 +294,7 @@ static int64_t invoke_timers()
 
     for (int i = 0; i < ARRAY_SIZE(s_devices); i++) {
         lu_device_t *device = &s_devices[i];
-        if (device->pub.connection == EGC_CONNECTION_DISCONNECTED)
+        if (PUB(device)->connection == EGC_CONNECTION_DISCONNECTED)
             continue;
         if (device->timer_us <= 0)
             continue;
@@ -306,7 +308,7 @@ static int64_t invoke_timers()
         }
 
         /* timer has expired, invoke the callback */
-        bool keep = device->timer_callback(&device->pub);
+        bool keep = device->timer_callback(PUB(device));
         if (keep) {
             /* Set the repeat timer */
             device->timer_us = now + device->repeat_timer_us;

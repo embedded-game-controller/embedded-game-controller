@@ -112,7 +112,8 @@ struct ds3_private_data_t {
     u8 leds;
     bool rumble_on;
 };
-static_assert(sizeof(struct ds3_private_data_t) <= EGC_INPUT_DEVICE_PRIVATE_DATA_SIZE);
+static_assert(sizeof(struct ds3_private_data_t) <= EGC_INPUT_DEVICE_DRIVER_DATA_SIZE);
+#define PRIV(input_device) ((struct ds3_private_data_t *)get_priv(input_device)->private_data)
 
 /* Map each button of the controller to an egc_gamepad_button_e */
 static const egc_gamepad_button_e s_button_map[DS3_BUTTON_COUNT] = {
@@ -291,7 +292,7 @@ static int ds3_set_leds_rumble(egc_input_device_t *device, u8 leds, const struct
 
 static int ds3_driver_update_leds_rumble(egc_input_device_t *device)
 {
-    struct ds3_private_data_t *priv = (void *)device->private_data;
+    struct ds3_private_data_t *priv = PRIV(device);
     struct ds3_rumble rumble;
     u8 leds;
 
@@ -317,7 +318,7 @@ bool ds3_driver_ops_probe(u16 vid, u16 pid)
 int ds3_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
 {
     int ret;
-    struct ds3_private_data_t *priv = (void *)device->private_data;
+    struct ds3_private_data_t *priv = PRIV(device);
 
     device->desc = &s_device_description;
 
@@ -334,7 +335,7 @@ int ds3_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
 
 int ds3_driver_ops_disconnect(egc_input_device_t *device)
 {
-    struct ds3_private_data_t *priv = (void *)device->private_data;
+    struct ds3_private_data_t *priv = PRIV(device);
 
     priv->leds = 0;
     priv->rumble_on = false;
@@ -344,7 +345,7 @@ int ds3_driver_ops_disconnect(egc_input_device_t *device)
 
 int ds3_driver_ops_set_leds(egc_input_device_t *device, u32 led_state)
 {
-    struct ds3_private_data_t *priv = (void *)device->private_data;
+    struct ds3_private_data_t *priv = PRIV(device);
 
     priv->leds = led_state;
 
@@ -353,7 +354,7 @@ int ds3_driver_ops_set_leds(egc_input_device_t *device, u32 led_state)
 
 int ds3_driver_ops_set_rumble(egc_input_device_t *device, bool rumble_on)
 {
-    struct ds3_private_data_t *priv = (void *)device->private_data;
+    struct ds3_private_data_t *priv = PRIV(device);
 
     priv->rumble_on = rumble_on;
 

@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "driver_api.h"
+#include "internals.h"
 #include "platform.h"
 #include "usb.h"
 #include "usb_backend.h"
@@ -59,8 +60,9 @@ const egc_usb_transfer_t *egc_device_driver_issue_intr_transfer_async(egc_input_
 
 static bool timer_cb_wrapper(egc_input_device_t *device)
 {
-    bool keep = (device->connection != EGC_CONNECTION_DISCONNECTED && device->driver->timer)
-                    ? device->driver->timer(device)
+    egc_device_priv_t *priv = get_priv(device);
+    bool keep = (device->connection != EGC_CONNECTION_DISCONNECTED && priv->driver->timer)
+                    ? priv->driver->timer(device)
                     : false;
     return keep;
 }
@@ -88,6 +90,8 @@ u32 egc_device_driver_map_buttons(u32 buttons, int count, const egc_gamepad_butt
 
 int egc_input_device_resume(egc_input_device_t *device)
 {
+    egc_device_priv_t *priv = get_priv(device);
+
     LOG_DEBUG("%s\n", __func__);
 
     if (!device->suspended)
@@ -101,9 +105,9 @@ int egc_input_device_resume(egc_input_device_t *device)
 #endif
     device->suspended = false;
 
-    if (device->driver->init) {
+    if (priv->driver->init) {
         const egc_usb_devdesc_t *desc = _egc_platform_backend.usb.get_device_descriptor(device);
-        return device->driver->init(device, desc->idVendor, desc->idProduct);
+        return priv->driver->init(device, desc->idVendor, desc->idProduct);
     }
 
     return 0;
@@ -111,12 +115,13 @@ int egc_input_device_resume(egc_input_device_t *device)
 
 int egc_input_device_suspend(egc_input_device_t *device)
 {
+    egc_device_priv_t *priv = get_priv(device);
     int ret = 0;
 
     LOG_DEBUG("%s\n", __func__);
 
-    if (device->driver->disconnect)
-        ret = device->driver->disconnect(device);
+    if (priv->driver->disconnect)
+        ret = priv->driver->disconnect(device);
 
         /* Suspend the device */
 #if 0
@@ -129,26 +134,31 @@ int egc_input_device_suspend(egc_input_device_t *device)
 
 int egc_input_device_set_leds(egc_input_device_t *device, u32 led_state)
 {
+    egc_device_priv_t *priv = get_priv(device);
+
     LOG_DEBUG("%s\n", __func__);
 
-    if (device->driver->set_leds)
-        return device->driver->set_leds(device, led_state);
+    if (priv->driver->set_leds)
+        return priv->driver->set_leds(device, led_state);
 
     return 0;
 }
 
 int egc_input_device_set_rumble(egc_input_device_t *device, u32 intensity)
 {
+    egc_device_priv_t *priv = get_priv(device);
+
     LOG_DEBUG("%s\n", __func__);
 
-    if (device->driver->set_rumble)
-        return device->driver->set_rumble(device, intensity > 0);
+    if (priv->driver->set_rumble)
+        return priv->driver->set_rumble(device, intensity > 0);
 
     return 0;
 }
 
 static int on_device_added(egc_input_device_t *device, u16 vid, u16 pid)
 {
+    egc_device_priv_t *priv = get_priv(device);
     const egc_device_driver_t *driver;
 
     /* Find if we have a driver for that VID/PID */
@@ -157,7 +167,7 @@ static int on_device_added(egc_input_device_t *device, u16 vid, u16 pid)
         return -1;
 
     /* We have ownership, populate the device info */
-    device->driver = driver;
+    priv->driver = driver;
     if (driver->init) {
         int rc = driver->init(device, vid, pid);
         if (rc < 0)
@@ -172,14 +182,15 @@ static int on_device_added(egc_input_device_t *device, u16 vid, u16 pid)
 
 static int on_device_removed(egc_input_device_t *device)
 {
+    egc_device_priv_t *priv = get_priv(device);
     int rc = 0;
 
     /* Inform the client */
     if (s_device_removed_cb)
         s_device_removed_cb(device, s_callbacks_userdata);
 
-    if (device->driver && device->driver->disconnect)
-        rc = device->driver->disconnect(device);
+    if (priv->driver && priv->driver->disconnect)
+        rc = priv->driver->disconnect(device);
 
     return rc;
 }

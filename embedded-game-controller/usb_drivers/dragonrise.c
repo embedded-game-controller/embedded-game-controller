@@ -46,7 +46,7 @@ enum dr_analog_axis_e {
 
 struct dr_private_data_t {
 };
-static_assert(sizeof(struct dr_private_data_t) <= EGC_INPUT_DEVICE_PRIVATE_DATA_SIZE);
+static_assert(sizeof(struct dr_private_data_t) <= EGC_INPUT_DEVICE_DRIVER_DATA_SIZE);
 
 /* Map each button of the controller to an egc_gamepad_button_e */
 static const egc_gamepad_button_e s_button_map[DR_BUTTON_COUNT] = {
