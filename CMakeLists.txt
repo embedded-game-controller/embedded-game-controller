@@ -17,6 +17,10 @@ project(
 
 option(BUILD_EXAMPLE "Build example program" OFF)
 
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+
 # This is a hack just to provide a more readable name to our target platform.
 # We could try to add a cmake toolchain file for Starlet in devkitPro.
 if(CMAKE_SYSTEM_NAME MATCHES "Generic-dkP")
@@ -32,10 +36,11 @@ endif()
 
 set(CMAKE_C_STANDARD 11)
 
+set(CMAKE_C_FLAGS_DEBUG "-g3")
+set(CMAKE_C_FLAGS_RELEASE "-O2")
+
 add_compile_options(
     ${ARCH}
-    -O2
-    -g3
     -ffreestanding
     -fomit-frame-pointer
     -ffunction-sections
