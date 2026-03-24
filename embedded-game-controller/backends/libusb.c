@@ -216,7 +216,10 @@ static int on_device_added(libusb_context *ctx, libusb_device *dev, libusb_hotpl
     device->timer_callback = NULL;
     PUB(device)->connection = EGC_CONNECTION_USB;
 
-    s_event_handler(PUB(device), EGC_EVENT_DEVICE_ADDED, desc.idVendor, desc.idProduct);
+    rc = s_event_handler(PUB(device), EGC_EVENT_DEVICE_ADDED, desc.idVendor, desc.idProduct);
+    if (rc < 0) {
+        libusb_release_interface(device->handle, 0);
+    }
     return 0;
 }
 
