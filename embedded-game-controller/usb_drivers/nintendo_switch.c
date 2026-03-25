@@ -262,8 +262,11 @@ static const ns_coded_command_t s_initialization_commands[] = {
 };
 #define NS_INITIALIZATION_COMPLETED (ARRAY_SIZE(s_initialization_commands))
 
+typedef void (*ns_usb_cmd_cb_t)(egc_input_device_t *device, const void *data, u16 length);
+
 struct ns_private_data_t {
     int update_count;
+    ns_usb_cmd_cb_t usb_cmd_cb;
     ns_joycon_imu_cal_t imu_cal;
     s16 accel_divisor[3];
     s16 gyro_divisor[3];
@@ -365,56 +368,22 @@ static bool parse_input_report(const struct ns_private_data_t *priv,
     return true;
 }
 
-static void on_request_completed(egc_usb_transfer_t *transfer)
+static int ns_send_report(egc_input_device_t *device, u8 *data, int size)
 {
-    egc_input_device_t *device = transfer->device;
-    ns_input_report_t *report = (void *)transfer->data;
+    return egc_device_driver_send_output_report(device, data, size);
+}
+
+static int ns_send_command_usb(egc_input_device_t *device, u8 command, ns_usb_cmd_cb_t callback)
+{
     struct ns_private_data_t *priv = PRIV(device);
-    struct egc_input_state_t state = { 0 };
 
-    if (transfer->status == EGC_USB_TRANSFER_STATUS_COMPLETED && transfer->length > 0) {
-        if (parse_input_report(priv, report, &state)) {
-            egc_device_driver_report_input(device, &state);
-            priv->update_count++;
-        }
-    } else if (transfer->status == EGC_USB_TRANSFER_STATUS_ERROR) {
-        EGC_DEBUG("status = %d, length=%d", transfer->status, transfer->length);
-    }
-
-    ns_active_step(device);
-}
-
-static int ns_request_data(egc_input_device_t *device)
-{
-    const egc_usb_transfer_t *transfer = egc_device_driver_issue_intr_transfer_async(
-        device, EGC_USB_ENDPOINT_IN | 1, NULL, 0, on_request_completed);
-    if (!transfer) {
-        EGC_WARN("Couldn't get a transfer!");
-    }
-    return transfer != NULL ? 0 : -1;
-}
-
-static void on_command_completed(egc_usb_transfer_t *transfer)
-{
-    egc_input_device_t *device = transfer->device;
-    ns_request_data(device);
-}
-
-static int ns_send_report(egc_input_device_t *device, u8 *data, int size, egc_transfer_cb callback)
-{
-    const egc_usb_transfer_t *transfer = egc_device_driver_issue_intr_transfer_async(
-        device, EGC_USB_ENDPOINT_OUT | 2, data, size, callback);
-    return transfer != NULL ? 0 : -1;
-}
-
-static int ns_send_command_usb(egc_input_device_t *device, u8 command, egc_transfer_cb callback)
-{
     u8 data[2] ATTRIBUTE_ALIGN(32) = { JC_OUTPUT_USB_CMD, command };
-    return ns_send_report(device, data, sizeof(data), callback);
+    priv->usb_cmd_cb = callback;
+    return ns_send_report(device, data, sizeof(data));
 }
 
 static int ns_send_subcmd(egc_input_device_t *device, struct ns_subcmd_request *req, int size,
-                          egc_transfer_cb callback)
+                          ns_usb_cmd_cb_t callback)
 {
     struct ns_private_data_t *priv = PRIV(device);
 
@@ -424,7 +393,8 @@ static int ns_send_subcmd(egc_input_device_t *device, struct ns_subcmd_request *
         priv->next_packet_num = 0;
     }
     memcpy(req->rumble_data, s_rumble_data, sizeof(s_rumble_data));
-    return ns_send_report(device, (u8 *)req, sizeof(*req) + size, callback);
+    priv->usb_cmd_cb = callback;
+    return ns_send_report(device, (u8 *)req, sizeof(*req) + size);
 }
 
 static int ns_rumble(egc_input_device_t *device)
@@ -444,7 +414,7 @@ static int ns_rumble(egc_input_device_t *device)
     rumble[2] = rumble[6] = freq_lo + (amp_lo >> 8);
     rumble[3] = rumble[7] = amp_lo & 0xff;
 
-    return ns_send_report(device, data, sizeof(data), on_command_completed);
+    return ns_send_report(device, data, sizeof(data));
 }
 
 static int ns_set_player_leds(egc_input_device_t *device, u8 flash, u8 on)
@@ -455,7 +425,7 @@ static int ns_set_player_leds(egc_input_device_t *device, u8 flash, u8 on)
 
     req->subcmd_id = JC_SUBCMD_SET_PLAYER_LIGHTS;
     req->data[0] = flash << 4 | on;
-    return ns_send_subcmd(device, req, 1, on_command_completed);
+    return ns_send_subcmd(device, req, 1, NULL);
 }
 
 void ns_active_step(egc_input_device_t *device)
@@ -467,8 +437,6 @@ void ns_active_step(egc_input_device_t *device)
         priv->led_change_queued = false;
     } else if (priv->requested_rumble) {
         ns_rumble(device);
-    } else {
-        ns_request_data(device);
     }
 }
 
@@ -480,19 +448,18 @@ static void ns_copy_u16_from_le(u16 *dst, const u16 *src, size_t count)
         dst[i] = le16toh(src[i]);
 }
 
-static void ns_init_step_read_data_reply(egc_usb_transfer_t *transfer)
+static void ns_init_step_reply(egc_input_device_t *device, const void *data, u16 length)
 {
-    egc_input_device_t *device = transfer->device;
     struct ns_private_data_t *priv = PRIV(device);
 
     const ns_coded_command_t *step = &s_initialization_commands[priv->init_state];
     if (step->type == NS_CODED_CAL) {
-        ns_input_report_t *report = (void *)transfer->data;
+        const ns_input_report_t *report = data;
 
         if (report->subcmd_reply.ack) {
             u16 requested_address = report->subcmd_reply.spi_reply.req.addr;
             if (requested_address == htole16(JC_SPI_ADDR_IMU_CAL_USR_MAGIC)) {
-                struct ns_spi_imu_cal_user_t *user_cal =
+                const struct ns_spi_imu_cal_user_t *user_cal =
                     &report->subcmd_reply.spi_reply.imu_cal_user;
 
                 if (user_cal->magic == htole16(JC_CAL_USR_MAGIC)) {
@@ -500,7 +467,8 @@ static void ns_init_step_read_data_reply(egc_usb_transfer_t *transfer)
                                         sizeof(ns_joycon_imu_cal_t) / sizeof(u16));
                 }
             } else if (requested_address == htole16(JC_SPI_ADDR_IMU_CAL_FCT)) {
-                ns_joycon_imu_cal_t *factory_cal = &report->subcmd_reply.spi_reply.imu_cal_factory;
+                const ns_joycon_imu_cal_t *factory_cal =
+                    &report->subcmd_reply.spi_reply.imu_cal_factory;
                 ns_copy_u16_from_le((u16 *)&priv->imu_cal, (u16 *)factory_cal,
                                     sizeof(ns_joycon_imu_cal_t) / sizeof(u16));
             } else {
@@ -512,16 +480,10 @@ static void ns_init_step_read_data_reply(egc_usb_transfer_t *transfer)
     ns_init_step(device);
 }
 
-static void ns_init_step_reply(egc_usb_transfer_t *transfer)
-{
-    egc_input_device_t *device = transfer->device;
-    egc_device_driver_issue_intr_transfer_async(device, EGC_USB_ENDPOINT_IN | 1, NULL, 0,
-                                                ns_init_step_read_data_reply);
-}
-
 static void ns_string_descriptor_reply(egc_usb_transfer_t *transfer)
 {
     egc_input_device_t *device = transfer->device;
+    EGC_DEBUG("status %d, length %d", transfer->status, transfer->length);
     ns_init_step(device);
 }
 
@@ -596,6 +558,35 @@ static int ns_init_step(egc_input_device_t *device)
     return rc;
 }
 
+static void ns_driver_ops_intr_event(egc_input_device_t *device, const void *data, u16 length)
+{
+    struct ns_private_data_t *priv = PRIV(device);
+
+    if (length == 0)
+        return;
+
+    switch (((const u8 *)data)[0]) {
+    case JC_INPUT_USB_RESPONSE:
+    case JC_INPUT_SUBCMD_REPLY:
+        if (priv->usb_cmd_cb) {
+            ns_usb_cmd_cb_t callback = priv->usb_cmd_cb;
+            priv->usb_cmd_cb = NULL;
+            callback(device, data, length);
+        }
+        break;
+    case JC_INPUT_BUTTON_EVENT:
+    case JC_INPUT_IMU_DATA:
+        {
+            struct egc_input_state_t state = { 0 };
+            if (parse_input_report(priv, data, &state)) {
+                egc_device_driver_report_input(device, &state);
+                priv->update_count++;
+            }
+        }
+        break;
+    }
+}
+
 static bool ns_driver_ops_probe(u16 vid, u16 pid)
 {
     static const egc_device_id_t compatible[] = {
@@ -610,6 +601,8 @@ static int ns_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
     struct ns_private_data_t *priv = PRIV(device);
 
     device->desc = &s_device_description;
+    egc_device_driver_set_endpoints(device, EGC_USB_ENDPOINT_IN | 1, 0, EGC_USB_ENDPOINT_OUT | 2,
+                                    0);
 
     /* Init private state */
     priv->next_packet_num = 0;
@@ -633,16 +626,25 @@ static int ns_driver_ops_set_leds(egc_input_device_t *device, u32 leds)
 {
     struct ns_private_data_t *priv = PRIV(device);
 
+    EGC_DEBUG("leds: %" PRIu32, leds);
     priv->requested_leds = leds;
-    priv->led_change_queued = true;
+    if (priv->init_state < NS_INITIALIZATION_COMPLETED) {
+        priv->led_change_queued = true;
+    } else {
+        ns_set_player_leds(device, 0, priv->requested_leds);
+    }
     return 0;
 }
 
 static int ns_driver_ops_set_rumble(egc_input_device_t *device, bool rumble_on)
 {
     struct ns_private_data_t *priv = PRIV(device);
+    EGC_DEBUG("on: %d", rumble_on);
     if (rumble_on != priv->requested_rumble) {
         priv->requested_rumble = rumble_on;
+        if (priv->init_state >= NS_INITIALIZATION_COMPLETED) {
+            ns_rumble(device);
+        }
     }
     return 0;
 }
@@ -652,4 +654,5 @@ const egc_device_driver_t ns_usb_device_driver = {
     .init = ns_driver_ops_init,
     .set_leds = ns_driver_ops_set_leds,
     .set_rumble = ns_driver_ops_set_rumble,
+    .intr_event = ns_driver_ops_intr_event,
 };

@@ -183,8 +183,6 @@ static const egc_device_description_t s_device_description = {
     .has_rumble = true,
 };
 
-static inline int ds4_request_data(egc_input_device_t *device);
-
 static inline u32 ds4_get_buttons(const struct ds4_input_report *report)
 {
     u32 mask = 0;
@@ -248,18 +246,15 @@ static inline int ds4_set_leds_rumble(egc_input_device_t *device, u8 r, u8 g, u8
         0x00  // LED off duration
     };
 
-    const egc_usb_transfer_t *transfer =
-        egc_device_driver_issue_intr_transfer_async(device, 1, buf, sizeof(buf), NULL);
-    return transfer != NULL ? 0 : -1;
+    return egc_device_driver_send_output_report(device, buf, sizeof(buf));
 }
 
-static void ds4_request_data_cb(egc_usb_transfer_t *transfer)
+static void ds4_parse_input_report(egc_input_device_t *device,
+                                   const struct ds4_input_report *report)
 {
-    egc_input_device_t *device = transfer->device;
-    struct ds4_input_report *report = (void *)transfer->data;
     struct egc_input_state_t state;
 
-    if (transfer->status == EGC_USB_TRANSFER_STATUS_COMPLETED && report->report_id == 0x01) {
+    if (report->report_id == 0x01) {
         u32 buttons = ds4_get_buttons(report);
         state.gamepad.buttons =
             egc_device_driver_map_buttons(buttons, DS4_BUTTON_COUNT, s_button_map);
@@ -301,15 +296,6 @@ static void ds4_request_data_cb(egc_usb_transfer_t *transfer)
 
         egc_device_driver_report_input(device, &state);
     }
-
-    ds4_request_data(device);
-}
-
-static inline int ds4_request_data(egc_input_device_t *device)
-{
-    const egc_usb_transfer_t *transfer = egc_device_driver_issue_intr_transfer_async(
-        device, EGC_USB_ENDPOINT_IN, NULL, 0, ds4_request_data_cb);
-    return transfer != NULL ? 0 : -1;
 }
 
 static int ds4_driver_update_leds_rumble(egc_input_device_t *device)
@@ -344,7 +330,8 @@ int ds4_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
     priv->led_color[0] = priv->led_color[1] = priv->led_color[2] = 0;
     priv->rumble_on = false;
 
-    return ds4_request_data(device);
+    egc_device_driver_set_endpoints(device, EGC_USB_ENDPOINT_IN, 5, EGC_USB_ENDPOINT_OUT | 1, 5);
+    return 0;
 }
 
 int ds4_driver_ops_disconnect(egc_input_device_t *device)
@@ -399,10 +386,21 @@ int ds4_driver_ops_set_rumble(egc_input_device_t *device, bool rumble_on)
     return ds4_driver_update_leds_rumble(device);
 }
 
+static void ds4_driver_ops_intr_event(egc_input_device_t *device, const void *data, u16 length)
+{
+    u8 report_id = ((const u8 *)data)[0];
+    switch (report_id) {
+    case 0x01:
+        ds4_parse_input_report(device, data);
+        break;
+    }
+}
+
 const egc_device_driver_t ds4_usb_device_driver = {
     .probe = ds4_driver_ops_probe,
     .init = ds4_driver_ops_init,
     .disconnect = ds4_driver_ops_disconnect,
     .set_leds = ds4_driver_ops_set_leds,
     .set_rumble = ds4_driver_ops_set_rumble,
+    .intr_event = ds4_driver_ops_intr_event,
 };
