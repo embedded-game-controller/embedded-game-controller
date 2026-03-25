@@ -39,9 +39,24 @@
 #define EGC_WARN(fmt, ...) EGC_LOG("[W] " fmt "\n", ##__VA_ARGS__)
 #ifdef EGC_WITH_DEBUG
 #define EGC_DEBUG(fmt, ...) EGC_LOG("[D] %s:%d: " fmt "\n", __func__, __LINE__, ##__VA_ARGS__)
+
+#define EGC_DEBUG_DATA(data, len) egc_debug_data(__func__, data, len)
 #else
-#define EGC_DEBUG(fmt, ...) (void)0
+#define EGC_DEBUG(fmt, ...)       (void)0
+#define EGC_DEBUG_DATA(data, len) (void)0
 #endif
+
+static inline void egc_debug_data(const char *prefix, const u8 *data, u16 length)
+{
+    char buffer[100];
+    if (length > 30)
+        length = 30;
+    char *ptr = buffer;
+    for (int i = 0; i < length; i++) {
+        ptr += snprintf(ptr, sizeof(buffer) - (ptr - buffer), " %02x", data[i]);
+    }
+    EGC_LOG("%s%s\n", prefix, buffer);
+}
 
 static inline int memmismatch(const void *restrict a, const void *restrict b, int size)
 {
