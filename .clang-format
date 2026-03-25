@@ -1,7 +1,12 @@
 BasedOnStyle: LLVM
 IndentWidth: 4
+IndentCaseBlocks: true
 UseTab: Never
-BreakBeforeBraces: Linux
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterCaseLabel: true
+  AfterControlStatement: Never
+  AfterFunction: true
 AlignConsecutiveMacros: Consecutive
 AllowShortEnumsOnASingleLine: false
 AllowShortIfStatementsOnASingleLine: Never
