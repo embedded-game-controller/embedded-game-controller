@@ -14,6 +14,7 @@ struct egc_device_driver_t {
     int (*set_leds)(egc_input_device_t *device, u32 leds);
     int (*set_rumble)(egc_input_device_t *device, bool rumble_on);
     bool (*timer)(egc_input_device_t *device);
+    void (*intr_event)(egc_input_device_t *device, const void *data, u16 length);
 };
 
 typedef struct {
@@ -33,6 +34,10 @@ static inline bool egc_device_driver_is_compatible(u16 vid, u16 pid, const egc_d
 }
 
 egc_device_description_t *egc_device_driver_alloc_desc(egc_input_device_t *device);
+/* For USB connections */
+void egc_device_driver_set_endpoints(egc_input_device_t *device, u8 endpoint_in, u8 interval_in,
+                                     u8 endpoint_out, u8 interval_out);
+int egc_device_driver_send_output_report(egc_input_device_t *device, void *data, u16 length);
 const egc_usb_transfer_t *egc_device_driver_issue_ctrl_transfer_async(egc_input_device_t *device,
                                                                       u8 requesttype, u8 request,
                                                                       u16 value, u16 index,

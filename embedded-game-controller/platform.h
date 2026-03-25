@@ -7,6 +7,7 @@
 typedef enum egc_event_e {
     EGC_EVENT_DEVICE_ADDED,
     EGC_EVENT_DEVICE_REMOVED,
+    EGC_EVENT_DEVICE_INPUT,
 } egc_event_e;
 
 typedef int (*egc_event_cb)(egc_input_device_t *device, egc_event_e event, ...);
@@ -35,5 +36,7 @@ typedef struct egc_platform_backend_t {
 } egc_platform_backend_t;
 
 extern const egc_platform_backend_t _egc_platform_backend;
+
+void _egc_input_device_intr_data_received(egc_input_device_t *device, const void *data, u16 length);
 
 #endif

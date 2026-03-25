@@ -20,6 +20,8 @@ static egc_input_device_cb s_device_added_cb = NULL;
 static egc_input_device_cb s_device_removed_cb = NULL;
 static void *s_callbacks_userdata = NULL;
 
+static void read_interrupts(egc_input_device_t *device);
+
 static inline const egc_device_driver_t *get_usb_device_driver_for(u16 vid, u16 pid)
 {
     for (int i = 0; i < ARRAY_SIZE(usb_device_drivers); i++) {
@@ -30,10 +32,88 @@ static inline const egc_device_driver_t *get_usb_device_driver_for(u16 vid, u16 
     return NULL;
 }
 
+static void interrupt_read_cb(egc_usb_transfer_t *transfer)
+{
+    egc_input_device_t *device = transfer->device;
+
+    if (transfer->status == EGC_USB_TRANSFER_STATUS_COMPLETED) {
+        _egc_input_device_intr_data_received(device, transfer->data, transfer->length);
+    }
+
+    read_interrupts(device);
+}
+
+static void read_interrupts(egc_input_device_t *device)
+{
+    egc_device_priv_t *priv = get_priv(device);
+
+    if (device->suspended || !priv->driver->intr_event ||
+        !(priv->endpoint_in & EGC_USB_ENDPOINT_IN))
+        return;
+
+    const egc_usb_transfer_t *transfer = egc_device_driver_issue_intr_transfer_async(
+        device, priv->endpoint_in, NULL, 0, interrupt_read_cb);
+    if (!transfer) {
+        EGC_DEBUG("Could not get a in transfer!");
+    }
+}
+
 /* API exposed to USB device drivers */
 egc_device_description_t *egc_device_driver_alloc_desc(egc_input_device_t *device)
 {
     return _egc_platform_backend.alloc_desc(device);
+}
+
+void egc_device_driver_set_endpoints(egc_input_device_t *device, u8 endpoint_in, u8 interval_in,
+                                     u8 endpoint_out, u8 interval_out)
+{
+    egc_device_priv_t *priv = get_priv(device);
+    priv->endpoint_in = endpoint_in;
+    priv->endpoint_out = endpoint_out;
+    priv->interval_in = interval_in;
+    priv->interval_out = interval_out;
+}
+
+int egc_device_driver_send_output_report(egc_input_device_t *device, void *data, u16 length)
+{
+    egc_device_priv_t *priv = get_priv(device);
+
+    const egc_usb_transfer_t *transfer =
+        egc_device_driver_issue_intr_transfer_async(device, priv->endpoint_out, data, length, NULL);
+    if (device->connection != EGC_CONNECTION_BT && !transfer) {
+        EGC_DEBUG("Could not get a transfer for out %02x!", ((u8 *)data)[0]);
+        return -1;
+    }
+    return 0;
+}
+
+void _egc_input_device_intr_data_received(egc_input_device_t *device, const void *data, u16 length)
+{
+    egc_device_priv_t *priv = get_priv(device);
+    priv->driver->intr_event(device, data, length);
+}
+
+bool _egc_can_submit_transfer(egc_usb_transfer_t *t)
+{
+    egc_input_device_t *device = t->device;
+    egc_device_priv_t *priv = get_priv(device);
+
+    /* We only throttle interrupt transfers */
+    if (t->transfer_type != EGC_USB_TRANSFER_INTERRUPT)
+        return true;
+
+    bool can_submit = true;
+    if (t->endpoint == priv->endpoint_in) {
+        can_submit = priv->wait_time_in == 0;
+        if (can_submit)
+            priv->wait_time_in = priv->interval_in;
+    } else if (t->endpoint == priv->endpoint_out) {
+        can_submit = priv->wait_time_out == 0;
+        if (can_submit)
+            priv->wait_time_out = priv->interval_out;
+    }
+
+    return can_submit;
 }
 
 const egc_usb_transfer_t *egc_device_driver_issue_ctrl_transfer_async(egc_input_device_t *device,
@@ -110,6 +190,7 @@ int egc_input_device_resume(egc_input_device_t *device)
         return priv->driver->init(device, desc->idVendor, desc->idProduct);
     }
 
+    read_interrupts(device);
     return 0;
 }
 
@@ -174,6 +255,8 @@ static int on_device_added(egc_input_device_t *device, u16 vid, u16 pid)
             return rc;
     }
 
+    read_interrupts(device);
+
     /* Inform the client */
     if (s_device_added_cb)
         s_device_added_cb(device, s_callbacks_userdata);
@@ -195,13 +278,26 @@ static int on_device_removed(egc_input_device_t *device)
     return rc;
 }
 
+static void on_device_input(egc_input_device_t *device, void *data, u16 length)
+{
+    egc_device_priv_t *priv = get_priv(device);
+    if (priv->driver->intr_event) {
+        priv->driver->intr_event(device, data, length);
+    }
+}
+
 static int event_handler(egc_input_device_t *device, egc_event_e event, ...)
 {
     va_list args;
     va_start(args, event);
     int rc = -1;
 
-    if (event == EGC_EVENT_DEVICE_ADDED) {
+    if (event == EGC_EVENT_DEVICE_INPUT) {
+        void *buffer = va_arg(args, void *);
+        u16 length = va_arg(args, int);
+        on_device_input(device, buffer, length);
+        rc = 0;
+    } else if (event == EGC_EVENT_DEVICE_ADDED) {
         u16 vid = va_arg(args, int);
         u16 pid = va_arg(args, int);
         rc = on_device_added(device, vid, pid);

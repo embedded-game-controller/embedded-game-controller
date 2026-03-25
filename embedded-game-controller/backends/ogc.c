@@ -30,7 +30,7 @@
 
 /* Constants */
 #define USB_MAX_DEVICES      32
-#define MAX_ACTIVE_TRANSFERS 2
+#define MAX_ACTIVE_TRANSFERS 4
 
 /* USBv5 HID message structure */
 struct usb_hid_v5_transfer {
@@ -75,6 +75,7 @@ typedef struct {
     };
     /* Timer ID (-1 if unset), its address used as timer cookie */
     int timer_id;
+    bool ready;
     egc_timer_cb timer_callback;
 } ogc_device_t;
 
@@ -107,6 +108,8 @@ static int host_fd = -1;
 static u32 queue_data[OGC_MAX_EVENTS] ATTRIBUTE_ALIGN(32);
 static int queue_id = -1;
 static egc_event_cb s_event_handler;
+static volatile u32 *s_hw_timer = (u32 *)0x0d800010;
+static u32 s_last_clock_ms = 0;
 
 /* Async notification messages */
 static areply notification_messages[2] = { 0 };
@@ -199,27 +202,25 @@ static int usb_hid_v5_get_descriptors(int host_fd, u32 dev_id, egc_usb_devdesc_t
     return rc;
 }
 
-static inline void build_ctrl_transfer(struct usb_hid_v5_transfer *transfer, ogc_transfer_t *t,
-                                       u8 bmRequest, u16 wValue, u16 wIndex)
+static inline void build_ctrl_transfer(struct usb_hid_v5_transfer *transfer, ogc_transfer_t *t)
 {
     ogc_device_t *device = ogc_device_from_input_device(t->t.device);
     memset(transfer, 0, sizeof(*transfer));
     transfer->dev_id = device->usb.dev_id;
     transfer->ctrl.bmRequestType = t->t.endpoint;
-    transfer->ctrl.bmRequest = bmRequest;
-    transfer->ctrl.wValue = wValue;
-    transfer->ctrl.wIndex = wIndex;
+    transfer->ctrl.bmRequest = t->t.request;
+    transfer->ctrl.wValue = t->t.value;
+    transfer->ctrl.wIndex = t->t.index;
 }
 
-static inline int usb_hid_v5_ctrl_transfer_async(ogc_transfer_t *t, u8 bmRequest, u16 wValue,
-                                                 u16 wIndex, int queue_id)
+static int usb_hid_v5_ctrl_transfer_async(ogc_transfer_t *t, int queue_id)
 {
     struct usb_hid_v5_transfer transfer ATTRIBUTE_ALIGN(32);
     ogc_device_t *device = ogc_device_from_input_device(t->t.device);
     ioctlv vectors[2];
     int out = !(t->t.endpoint & EGC_USB_ENDPOINT_IN);
 
-    build_ctrl_transfer(&transfer, t, bmRequest, wValue, wIndex);
+    build_ctrl_transfer(&transfer, t);
 
     vectors[0].data = &transfer;
     vectors[0].len = sizeof(transfer);
@@ -281,11 +282,12 @@ static int usb_hid_v5_suspend_resume(int host_fd, int dev_id, int resumed)
     return os_ioctl(host_fd, USBV5_IOCTL_SUSPEND_RESUME, buf, sizeof(buf), NULL, 0);
 }
 
-static const egc_usb_transfer_t *ogc_ctrl_transfer_async(egc_input_device_t *device, u8 requesttype,
-                                                         u8 request, u16 value, u16 index,
-                                                         void *data, u16 length,
+static const egc_usb_transfer_t *ogc_ctrl_transfer_async(egc_input_device_t *input_device,
+                                                         u8 requesttype, u8 request, u16 value,
+                                                         u16 index, void *data, u16 length,
                                                          egc_transfer_cb callback)
 {
+    ogc_device_t *device = (ogc_device_t *)input_device;
     ogc_transfer_t *t = get_free_transfer();
     if (!t)
         return NULL;
@@ -296,24 +298,32 @@ static const egc_usb_transfer_t *ogc_ctrl_transfer_async(egc_input_device_t *dev
     } else if (requesttype & EGC_USB_ENDPOINT_IN) {
         length = sizeof(t->buffer);
     }
-    t->t.device = device;
+    t->t.device = input_device;
     t->t.transfer_type = EGC_USB_TRANSFER_CONTROL;
+    t->t.status = EGC_USB_TRANSFER_STATUS_WAITING;
     t->t.endpoint = requesttype;
+    t->t.request = request;
+    t->t.value = value;
+    t->t.index = index;
     t->t.length = length;
     t->t.data = t->buffer;
     t->callback = callback;
-    int rc = usb_hid_v5_ctrl_transfer_async(t, request, value, index, queue_id);
-    if (rc < 0) {
-        t->t.device = NULL; /* Mark as unused */
-        t = NULL;
+    if (device->ready && _egc_can_submit_transfer(&t->t)) {
+        int rc = usb_hid_v5_ctrl_transfer_async(t, queue_id);
+        if (rc < 0) {
+            t->t.device = NULL; /* Mark as unused */
+            return NULL;
+        }
+        t->t.status = EGC_USB_TRANSFER_STATUS_SUBMITTED;
     }
     return &t->t;
 }
 
-static const egc_usb_transfer_t *ogc_intr_transfer_async(egc_input_device_t *device, u8 endpoint,
-                                                         void *data, u16 length,
+static const egc_usb_transfer_t *ogc_intr_transfer_async(egc_input_device_t *input_device,
+                                                         u8 endpoint, void *data, u16 length,
                                                          egc_transfer_cb callback)
 {
+    ogc_device_t *device = (ogc_device_t *)input_device;
     ogc_transfer_t *t = get_free_transfer();
     if (!t)
         return NULL;
@@ -324,18 +334,84 @@ static const egc_usb_transfer_t *ogc_intr_transfer_async(egc_input_device_t *dev
     } else if (endpoint & EGC_USB_ENDPOINT_IN) {
         length = sizeof(t->buffer);
     }
-    t->t.device = device;
+    t->t.device = input_device;
     t->t.transfer_type = EGC_USB_TRANSFER_INTERRUPT;
+    t->t.status = EGC_USB_TRANSFER_STATUS_WAITING;
     t->t.endpoint = endpoint;
     t->t.length = length;
     t->t.data = t->buffer;
     t->callback = callback;
-    int rc = usb_hid_v5_intr_transfer_async(t, queue_id);
-    if (rc < 0) {
-        t->t.device = NULL; /* Mark as unused */
-        return NULL;
+    if (device->ready && _egc_can_submit_transfer(&t->t)) {
+        int rc = usb_hid_v5_intr_transfer_async(t, queue_id);
+        if (rc < 0) {
+            t->t.device = NULL; /* Mark as unused */
+            return NULL;
+        }
+        t->t.status = EGC_USB_TRANSFER_STATUS_SUBMITTED;
     }
     return &t->t;
+}
+
+static int submit_transfer(ogc_transfer_t *t)
+{
+    int rc = -1;
+    if (t->t.transfer_type == EGC_USB_TRANSFER_INTERRUPT) {
+        rc = usb_hid_v5_intr_transfer_async(t, queue_id);
+    } else if (t->t.transfer_type == EGC_USB_TRANSFER_CONTROL) {
+        rc = usb_hid_v5_ctrl_transfer_async(t, queue_id);
+    }
+    if (rc < 0) {
+        t->t.device = NULL; /* Mark as unused */
+    } else {
+        t->t.status = EGC_USB_TRANSFER_STATUS_SUBMITTED;
+    }
+    return rc;
+}
+
+static void on_elapsed_ms(u32 elapsed_ms)
+{
+    bool endpoint_became_available = false;
+    for (int i = 0; i < ARRAY_SIZE(s_devices); i++) {
+        ogc_device_t *device = &s_devices[i];
+        if (PUB(device)->connection == EGC_CONNECTION_DISCONNECTED)
+            continue;
+
+        egc_device_priv_t *priv = &device->priv;
+        if (_egc_update_endpoint_timeout(priv, elapsed_ms)) {
+            endpoint_became_available = true;
+        }
+    }
+
+    if (!endpoint_became_available)
+        return;
+
+    /* Check if we have any pending transfers which can be submitted */
+    for (int i = 0; i < ARRAY_SIZE(s_transfers); i++) {
+        ogc_transfer_t *t = &s_transfers[i];
+        if (!t->t.device || t->t.status != EGC_USB_TRANSFER_STATUS_WAITING)
+            continue;
+
+        if (_egc_can_submit_transfer(&t->t)) {
+            submit_transfer(t);
+        }
+    }
+}
+
+static void check_waiting_actions()
+{
+    u32 tick_now = *s_hw_timer;
+    /* One tick is 526.7 nanoseconds */
+    u32 clock_ms = (tick_now / 1000) * 527 / 1000;
+    if (clock_ms > s_last_clock_ms) {
+        on_elapsed_ms(clock_ms - s_last_clock_ms);
+    } else {
+        /* If the time is the same, we simply have nothing to do. Note that it
+         * can also happen that clock_ms is smaller than last_clock_ms, as the
+         * timer wraps around every 37.7 minutes. In this case too we do
+         * nothing: the worst that can happen is that we skip some milliseconds
+         * (that is, we wait a few ms too many). */
+    }
+    s_last_clock_ms = clock_ms;
 }
 
 static int ogc_set_timer(egc_input_device_t *input_device, int time_us, int repeat_time_us,
@@ -475,6 +551,7 @@ static void handle_device_change_reply(int host_fd, areply *reply)
         device->usb.dev_id = dev_id;
         device->timer_id = -1;
         device->timer_callback = NULL;
+        device->ready = false;
         PUB(device)->connection = EGC_CONNECTION_USB;
 
         if (!report_event(EGC_EVENT_DEVICE_ADDED, device)) {
@@ -518,6 +595,23 @@ static int usb_hid_init()
     return ret;
 }
 
+static void device_set_ready(ogc_device_t *device)
+{
+    EGC_DEBUG("");
+    device->ready = true;
+
+    /* Check if we have any pending transfers which can be submitted */
+    for (int i = 0; i < ARRAY_SIZE(s_transfers); i++) {
+        ogc_transfer_t *t = &s_transfers[i];
+        if (t->t.device != PUB(device) || t->t.status != EGC_USB_TRANSFER_STATUS_WAITING)
+            continue;
+
+        if (_egc_can_submit_transfer(&t->t)) {
+            submit_transfer(t);
+        }
+    }
+}
+
 static int process_queue(u32 timeout_us)
 {
     ogc_device_t *device;
@@ -543,6 +637,13 @@ static int process_queue(u32 timeout_us)
         if (message == MESSAGE_DEVCHANGE) {
             handle_device_change_reply(host_fd, message);
         } else if (message == MESSAGE_ATTACHFINISH) {
+            for (int i = 0; i < ARRAY_SIZE(s_devices); i++) {
+                device = &s_devices[i];
+                if (PUB(device)->connection == EGC_CONNECTION_USB && !device->ready) {
+                    device_set_ready(device);
+                }
+            }
+
             ret =
                 os_ioctl_async(host_fd, USBV5_IOCTL_GETDEVICECHANGE, NULL, 0, device_change_devices,
                                sizeof(device_change_devices), queue_id, MESSAGE_DEVCHANGE);
@@ -643,6 +744,7 @@ static int ogc_set_suspended(egc_input_device_t *input_device, bool suspended)
 
 static int ogc_wait_events(u32 timeout_us)
 {
+    check_waiting_actions();
     return process_queue(timeout_us);
 }
 

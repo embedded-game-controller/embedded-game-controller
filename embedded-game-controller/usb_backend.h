@@ -27,4 +27,8 @@ struct egc_usb_backend_t {
                                                      egc_transfer_cb callback);
 };
 
+/* Helper functions */
+
+bool _egc_can_submit_transfer(egc_usb_transfer_t *t);
+
 #endif

@@ -42,7 +42,8 @@
 
 #define EGC_DEBUG_DATA(data, len) egc_debug_data(__func__, data, len)
 #else
-#define EGC_DEBUG(fmt, ...)       (void)0
+#define EGC_DEBUG(fmt, ...) (void)0
+
 #define EGC_DEBUG_DATA(data, len) (void)0
 #endif
 

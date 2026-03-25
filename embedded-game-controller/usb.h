@@ -161,6 +161,8 @@ typedef enum egc_usb_transfer_type_e {
 
 typedef enum egc_usb_transfer_status_e {
     EGC_USB_TRANSFER_STATUS_UNSET = 0,
+    EGC_USB_TRANSFER_STATUS_WAITING,
+    EGC_USB_TRANSFER_STATUS_SUBMITTED,
     EGC_USB_TRANSFER_STATUS_COMPLETED,
     EGC_USB_TRANSFER_STATUS_ERROR,
 } egc_usb_transfer_status_e;
@@ -172,6 +174,9 @@ struct egc_usb_transfer_t {
     egc_usb_transfer_type_e transfer_type;
     egc_usb_transfer_status_e status;
     u8 endpoint;
+    u8 request;  /* For control transfers */
+    u16 value;   /* For control transfers */
+    u16 index;   /* For control transfers */
     u16 length;  /* length of actually used data */
     u16 bufsize; /* data buffer size */
     u8 *data;
