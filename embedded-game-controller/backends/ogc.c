@@ -176,6 +176,17 @@ static ogc_transfer_t *get_free_transfer(void)
             return &s_transfers[i];
     }
 
+    for (int i = 0; i < ARRAY_SIZE(s_transfers); i++) {
+        egc_usb_transfer_t *t = &s_transfers[i].t;
+        char buffer[20] = {
+            0,
+        };
+        int len = t->length;
+        if (len > 20 && t->endpoint == 2) {
+            sprintf(buffer, "cmd %02x sub %02x", t->data[0], t->data[10]);
+        }
+        EGC_DEBUG("Busy: %p ep %02x l %d d %s", t, t->endpoint, t->length, buffer);
+    }
     return NULL;
 }
 
