@@ -52,8 +52,11 @@ static void read_interrupts(egc_input_device_t *device)
         !(priv->endpoint_in & EGC_USB_ENDPOINT_IN))
         return;
 
-    egc_device_driver_issue_intr_transfer_async(device, priv->endpoint_in, NULL, 0,
-                                                interrupt_read_cb);
+    const egc_usb_transfer_t *transfer = egc_device_driver_issue_intr_transfer_async(
+        device, priv->endpoint_in, NULL, 0, interrupt_read_cb);
+    if (!transfer) {
+        EGC_DEBUG("Could not get a in transfer!");
+    }
 }
 
 /* API exposed to USB device drivers */
@@ -77,10 +80,12 @@ int egc_device_driver_send_output_report(egc_input_device_t *device, void *data,
     egc_device_priv_t *priv = get_priv(device);
 
     if (device->connection == EGC_CONNECTION_USB) {
-        return _egc_platform_backend.usb.intr_transfer_async(device, priv->endpoint_out, data,
-                                                             length, NULL) != NULL
-                   ? 0
-                   : -1;
+        const egc_usb_transfer_t *transfer = _egc_platform_backend.usb.intr_transfer_async(
+            device, priv->endpoint_out, data, length, NULL);
+        if (!transfer) {
+            EGC_DEBUG("Could not get a transfer for out %02x!", ((u8 *)data)[0]);
+        }
+        return transfer ? 0 : -1;
     }
     return -1;
 }

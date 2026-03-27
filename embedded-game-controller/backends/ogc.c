@@ -184,8 +184,10 @@ static ogc_transfer_t *get_free_transfer(void)
         int len = t->length;
         if (len > 20 && t->endpoint == 2) {
             sprintf(buffer, "cmd %02x sub %02x", t->data[0], t->data[10]);
+        } else if (len >= 2 && t->endpoint == 2) {
+            sprintf(buffer, "cmd %02x cmdusb %02x", t->data[0], t->data[1]);
         }
-        EGC_DEBUG("Busy: %p ep %02x l %d d %s", t, t->endpoint, t->length, buffer);
+        EGC_DEBUG("Busy: st %d ep %02x l %d d %s", t->status, t->endpoint, len, buffer);
     }
     return NULL;
 }
@@ -258,6 +260,18 @@ static inline int usb_hid_v5_intr_transfer_async(ogc_transfer_t *t, int queue_id
     vectors[1].data = t->t.data;
     vectors[1].len = t->t.length;
 
+    if (out) {
+        char buffer[24] = {
+            0,
+        };
+        int len = t->t.length;
+        if (len > 20) {
+            sprintf(buffer, "cmd %02x sub %02x", t->t.data[0], t->t.data[10]);
+        } else if (len >= 2) {
+            sprintf(buffer, "cmd %02x cmdusb %02x", t->t.data[0], t->t.data[1]);
+        }
+        EGC_DEBUG("%p ep %02x l %d d %s..", &t->t, t->t.endpoint, t->t.length, buffer);
+    }
     return os_ioctlv_async(device->usb.host_fd, USBV5_IOCTL_INTRMSG, 1 + out, 1 - out, vectors,
                            queue_id, &t->reply);
 }
