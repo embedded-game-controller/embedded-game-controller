@@ -25,9 +25,6 @@ struct egc_usb_backend_t {
     const egc_usb_transfer_t *(*intr_transfer_async)(egc_input_device_t *device, u8 endpoint,
                                                      void *data, u16 length,
                                                      egc_transfer_cb callback);
-    const egc_usb_transfer_t *(*bulk_transfer_async)(egc_input_device_t *device, u8 endpoint,
-                                                     void *data, u16 length,
-                                                     egc_transfer_cb callback);
 };
 
 #endif
