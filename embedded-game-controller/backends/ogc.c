@@ -499,7 +499,7 @@ static void handle_device_change_reply(int host_fd, areply *reply)
 
         /* Oops, it got disconnected */
         if (!found) {
-            EGC_DEBUG("Device with VID: 0x%04" PRIx16 ", PID: 0x%04" PRIx16 ", dev_id: 0x%" PRIx32
+            EGC_DEBUG("Device with VID: 0x%04x, PID: 0x%04x, dev_id: 0x%" PRIx32
                       " got disconnected",
                       device->usb.vid, device->usb.pid, device->usb.dev_id);
 
@@ -513,8 +513,7 @@ static void handle_device_change_reply(int host_fd, areply *reply)
         vid = device_change_devices[i].vid;
         pid = device_change_devices[i].pid;
         dev_id = device_change_devices[i].device_id;
-        EGC_DEBUG("[%d] VID: 0x%04" PRIx16 ", PID: 0x%04" PRIx16 ", dev_id: 0x%" PRIx32, i, vid,
-                  pid, dev_id);
+        EGC_DEBUG("[%d] VID: 0x%04x, PID: 0x%04x, dev_id: 0x%" PRIx32, i, vid, pid, dev_id);
 
         /* Check if we already have that device (same dev_id) connected */
         if (is_usb_device_connected(dev_id))
