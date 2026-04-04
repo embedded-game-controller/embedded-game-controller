@@ -519,9 +519,11 @@ static int ns_init_step(egc_input_device_t *device)
     struct ns_private_data_t *priv = PRIV(device);
     int rc;
 
+    EGC_DEBUG("state %d", priv->init_state);
     priv->init_state++;
 
     if (priv->init_state >= NS_INITIALIZATION_COMPLETED) {
+        EGC_DEBUG("init complete!");
         ns_prepare_calibration(priv);
         /* Start reading data */
         ns_active_step(device);
@@ -565,9 +567,11 @@ static void ns_driver_ops_intr_event(egc_input_device_t *device, const void *dat
     if (length == 0)
         return;
 
-    switch (((const u8 *)data)[0]) {
+    u8 report_id = ((const u8 *)data)[0];
+    switch (report_id) {
     case JC_INPUT_USB_RESPONSE:
     case JC_INPUT_SUBCMD_REPLY:
+        EGC_DEBUG("rep ID %02x", report_id);
         if (priv->usb_cmd_cb) {
             ns_usb_cmd_cb_t callback = priv->usb_cmd_cb;
             priv->usb_cmd_cb = NULL;
@@ -584,6 +588,8 @@ static void ns_driver_ops_intr_event(egc_input_device_t *device, const void *dat
             }
         }
         break;
+    default:
+        EGC_DEBUG("rep ID %02x", ((const u8 *)data)[0]);
     }
 }
 
