@@ -143,6 +143,17 @@ static inline void leave_critical_section()
 #endif
 }
 
+static void sleep(int ms)
+{
+    int timer_msg;
+    void *msg;
+    static u32 queue_data[1] ATTRIBUTE_ALIGN(32);
+    int queue_id = os_message_queue_create(queue_data, 1);
+    os_create_timer(ms * 1000, 0, queue_id, (s32)&timer_msg);
+    os_message_queue_receive(queue_id, &msg, 0);
+    os_message_queue_destroy(queue_id);
+}
+
 static inline ogc_device_t *ogc_device_from_input_device(egc_input_device_t *input_device)
 {
     return (ogc_device_t *)input_device;
@@ -683,6 +694,11 @@ static int process_queue(u32 timeout_us)
                 ogc_transfer_t *transfer = &s_transfers[i];
                 if ((areply *)message == &transfer->reply) {
                     ogc_device_t *device = ogc_device_from_input_device(transfer->t.device);
+                    if (transfer->reply.result < 0) {
+                        EGC_DEBUG("transfer endp %02x failed %" PRId32 "pray", transfer->t.endpoint,
+                                  transfer->reply.result);
+                        sleep(5000);
+                    }
                     if (device->usb.dev_id != 0 && transfer->callback) {
                         if (transfer->reply.result >= 0) {
                             transfer->t.length = transfer->reply.result;
