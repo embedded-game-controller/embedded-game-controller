@@ -270,6 +270,7 @@ struct ns_private_data_t {
     ns_joycon_imu_cal_t imu_cal;
     s16 accel_divisor[3];
     s16 gyro_divisor[3];
+    s8 step_attempts;
     s8 init_state;
     u8 next_packet_num;
     u8 bt_mac_addr[6];
@@ -448,6 +449,18 @@ static void ns_copy_u16_from_le(u16 *dst, const u16 *src, size_t count)
         dst[i] = le16toh(src[i]);
 }
 
+static void ns_init_step_next(egc_input_device_t *device)
+{
+    struct ns_private_data_t *priv = PRIV(device);
+    priv->init_state++;
+    priv->step_attempts = 0;
+    /* Set a timeout so that if we didn't get a reply, we will retry
+     * running the same step */
+    u32 retry_time_us = 500 * 1000;
+    egc_device_driver_set_timer(device, retry_time_us, retry_time_us);
+    ns_init_step(device);
+}
+
 static void ns_init_step_reply(egc_input_device_t *device, const void *data, u16 length)
 {
     struct ns_private_data_t *priv = PRIV(device);
@@ -477,14 +490,14 @@ static void ns_init_step_reply(egc_input_device_t *device, const void *data, u16
             }
         }
     }
-    ns_init_step(device);
+    ns_init_step_next(device);
 }
 
 static void ns_string_descriptor_reply(egc_usb_transfer_t *transfer)
 {
     egc_input_device_t *device = transfer->device;
     EGC_DEBUG("status %d, length %d", transfer->status, transfer->length);
-    ns_init_step(device);
+    ns_init_step_next(device);
 }
 
 static int ns_get_string_descriptor(egc_input_device_t *device, u8 index)
@@ -520,7 +533,6 @@ static int ns_init_step(egc_input_device_t *device)
     int rc;
 
     EGC_DEBUG("state %d", priv->init_state);
-    priv->init_state++;
 
     if (priv->init_state >= NS_INITIALIZATION_COMPLETED) {
         EGC_DEBUG("init complete!");
@@ -589,8 +601,18 @@ static void ns_driver_ops_intr_event(egc_input_device_t *device, const void *dat
         }
         break;
     default:
-        EGC_DEBUG("rep ID %02x", ((const u8 *)data)[0]);
+        EGC_DEBUG_DATA(data, length);
     }
+}
+
+static bool ns_driver_ops_timer(egc_input_device_t *device)
+{
+    struct ns_private_data_t *priv = PRIV(device);
+    if (priv->init_state < NS_INITIALIZATION_COMPLETED) {
+        ns_init_step(device);
+        return priv->step_attempts++ < 10;
+    }
+    return false;
 }
 
 static bool ns_driver_ops_probe(u16 vid, u16 pid)
@@ -624,7 +646,7 @@ static int ns_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
         priv->imu_cal.gyro_scale[i] = 13371;
     }
 
-    ns_init_step(device);
+    ns_init_step_next(device);
     return 0;
 }
 
@@ -660,5 +682,6 @@ const egc_device_driver_t ns_usb_device_driver = {
     .init = ns_driver_ops_init,
     .set_leds = ns_driver_ops_set_leds,
     .set_rumble = ns_driver_ops_set_rumble,
+    .timer = ns_driver_ops_timer,
     .intr_event = ns_driver_ops_intr_event,
 };
