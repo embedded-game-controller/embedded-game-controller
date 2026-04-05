@@ -169,6 +169,9 @@ int main(int argc, char **argv)
     printf("Initializing...\n");
     int rc = egc_initialize(on_device_added, on_device_removed, NULL);
     printf("egc_initialize returned %d\n", rc);
+    int led = 0;
+    u32 rumble_intensity = 0;
+
     while (!quit_requested) {
         egc_wait_events(1000000);
 
@@ -179,6 +182,23 @@ int main(int argc, char **argv)
 
             if (device->state.gamepad.buttons)
                 print_status(device);
+
+            if (device->state.gamepad.buttons & (1 << EGC_GAMEPAD_BUTTON_SOUTH)) {
+                if (device->desc->num_leds > 0 &&
+                    device->state.gamepad.buttons & (1 << EGC_GAMEPAD_BUTTON_DPAD_RIGHT)) {
+                    led = (led + 1) % device->desc->num_leds;
+                    egc_input_device_set_leds(device, 1 << led);
+                }
+
+                if (device->desc->has_rumble) {
+                    u32 new_intensity =
+                        device->state.gamepad.buttons & (1 << EGC_GAMEPAD_BUTTON_DPAD_UP) ? 1 : 0;
+                    if (new_intensity != rumble_intensity) {
+                        egc_input_device_set_rumble(device, new_intensity);
+                        rumble_intensity = new_intensity;
+                    }
+                }
+            }
         }
     }
 
