@@ -5,11 +5,19 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef WITH_BLUETOOTH
+#include <bt-embedded/backends/libusb.h>
+#include <bt-embedded/services/hid.h>
+
+#include "bluetooth.h"
+#endif
+
 #include "platform.h"
 #include "utils.h"
 
 /* Maximum number of connected USB controllers. Increase this if needed. */
 #define MAX_ACTIVE_DEVICES 8
+#define INPUT_BUFFER_LEN   128
 
 typedef struct {
     /* This must be the first member, since we use it for casting */
@@ -29,7 +37,7 @@ typedef struct {
     egc_usb_transfer_t t;
     struct libusb_transfer *usb;
     egc_transfer_cb callback;
-    u8 buffer[128];
+    u8 buffer[INPUT_BUFFER_LEN];
 } lu_transfer_t;
 
 static libusb_context *s_libusb_ctx = NULL;
@@ -56,6 +64,14 @@ static int64_t timespec_to_us(const struct timespec *ts)
     return ts->tv_sec * 1000000 + ts->tv_nsec / 1000;
 }
 
+static void device_free(lu_device_t *device)
+{
+    if (device->handle) {
+        libusb_close(device->handle);
+    }
+    memset(device, 0, sizeof(*device));
+}
+
 static inline lu_device_t *get_free_device_slot(void)
 {
     for (int i = 0; i < ARRAY_SIZE(s_devices); i++) {
@@ -65,6 +81,35 @@ static inline lu_device_t *get_free_device_slot(void)
 
     return NULL;
 }
+
+#if WITH_BLUETOOTH
+static egc_input_device_t *lu_bt_device_alloc(const egc_bt_device_desc_t *desc)
+{
+    lu_device_t *device = get_free_device_slot();
+    if (!device)
+        return NULL;
+
+    memset(device, 0, sizeof(*device));
+    device->desc.vendor_id = desc->vendor_id;
+    device->desc.product_id = desc->product_id;
+    return PUB(device);
+}
+
+static int lu_bt_device_add(egc_input_device_t *input_device)
+{
+    lu_device_t *device = lu_device_from_input_device(input_device);
+    return s_event_handler(input_device, EGC_EVENT_DEVICE_ADDED, device->desc.vendor_id,
+                           device->desc.product_id);
+}
+
+static void lu_bt_device_free(egc_input_device_t *input_device)
+{
+    lu_device_t *device = lu_device_from_input_device(input_device);
+
+    s_event_handler(PUB(device), EGC_EVENT_DEVICE_REMOVED);
+    device_free(device);
+}
+#endif
 
 static void transfer_cb(struct libusb_transfer *transfer)
 {
@@ -234,9 +279,7 @@ static int on_device_removed(libusb_context *ctx, libusb_device *dev, libusb_hot
         if (PUB(device)->connection == EGC_CONNECTION_USB &&
             libusb_get_device(device->handle) == dev) {
             s_event_handler(PUB(device), EGC_EVENT_DEVICE_REMOVED);
-            libusb_close(device->handle);
-            device->handle = NULL;
-            PUB(device)->connection = EGC_CONNECTION_DISCONNECTED;
+            device_free(device);
             break;
         }
     }
@@ -271,6 +314,9 @@ static int lu_init(egc_event_cb event_handler)
         return rc;
     }
 
+#if WITH_BLUETOOTH
+    bte_backend_libusb_set_context(s_libusb_ctx);
+#endif
     return 0;
 }
 
@@ -344,6 +390,13 @@ const egc_platform_backend_t _egc_platform_backend = {
         .ctrl_transfer_async = lu_ctrl_transfer_async,
         .intr_transfer_async = lu_intr_transfer_async,
     },
+#if WITH_BLUETOOTH
+    .bt = {
+        .device_alloc = lu_bt_device_alloc,
+        .device_add = lu_bt_device_add,
+        .device_free = lu_bt_device_free,
+    },
+#endif
     .init = lu_init,
     .alloc_desc = lu_alloc_desc,
     .set_timer = lu_set_timer,

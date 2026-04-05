@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install clang-format
         run: sudo apt-get update -y && sudo apt-get install -y clang-format-18
@@ -37,6 +39,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install g++
         run: sudo apt-get update -y && sudo apt-get install g++ -y
@@ -54,12 +58,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install g++
         run: sudo apt-get update -y && sudo apt-get install g++ -y
 
       - name: Configure
-        run: cmake -DCMAKE_TOOLCHAIN_FILE:FILEPATH=$DEVKITPRO/cmake/devkitARM.cmake -S . -B build
+        run: cmake -DCMAKE_TOOLCHAIN_FILE:FILEPATH=$DEVKITPRO/cmake/devkitARM.cmake -DWITH_BLUETOOTH=OFF -S . -B build
 
       - name: Build
         run: cmake --build build
@@ -70,6 +76,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install compiler and dependencies
         run: sudo apt-get update -y && sudo apt-get install build-essential cmake libusb-1.0-0-dev -y

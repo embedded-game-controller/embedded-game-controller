@@ -143,4 +143,7 @@ int egc_handle_events(void);
 /* Fetch events and invoke callbacks. Wait up to \a timeout_us microseconds for new events. */
 int egc_wait_events(u32 timeout_us);
 
+int egc_bt_start_scan();
+int egc_bt_stop_scan();
+
 #endif

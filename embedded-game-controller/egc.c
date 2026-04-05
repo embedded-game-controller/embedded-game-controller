@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "bluetooth.h"
 #include "driver_api.h"
 #include "internals.h"
 #include "platform.h"
@@ -48,7 +49,7 @@ static void read_interrupts(egc_input_device_t *device)
     egc_device_priv_t *priv = get_priv(device);
 
     if (device->suspended || !priv->driver->intr_event ||
-        !(priv->endpoint_in & EGC_USB_ENDPOINT_IN))
+        device->connection != EGC_CONNECTION_USB || !(priv->endpoint_in & EGC_USB_ENDPOINT_IN))
         return;
 
     const egc_usb_transfer_t *transfer = egc_device_driver_issue_intr_transfer_async(
@@ -122,10 +123,14 @@ const egc_usb_transfer_t *egc_device_driver_issue_ctrl_transfer_async(egc_input_
                                                                       void *data, u16 length,
                                                                       egc_transfer_cb callback)
 {
-    if (device->connection == EGC_CONNECTION_DISCONNECTED)
-        return NULL;
-    return _egc_platform_backend.usb.ctrl_transfer_async(device, requesttype, request, value, index,
-                                                         data, length, callback);
+    if (device->connection == EGC_CONNECTION_USB) {
+        return _egc_platform_backend.usb.ctrl_transfer_async(device, requesttype, request, value,
+                                                             index, data, length, callback);
+    } else if (device->connection == EGC_CONNECTION_BT) {
+        return _egc_bt_ctrl_transfer(device, requesttype, request, value, index, data, length,
+                                     callback);
+    }
+    return NULL;
 }
 
 const egc_usb_transfer_t *egc_device_driver_issue_intr_transfer_async(egc_input_device_t *device,
@@ -133,9 +138,17 @@ const egc_usb_transfer_t *egc_device_driver_issue_intr_transfer_async(egc_input_
                                                                       u16 length,
                                                                       egc_transfer_cb callback)
 {
-    if (device->connection == EGC_CONNECTION_DISCONNECTED)
-        return NULL;
-    return _egc_platform_backend.usb.intr_transfer_async(device, endpoint, data, length, callback);
+    if (device->connection == EGC_CONNECTION_USB) {
+        return _egc_platform_backend.usb.intr_transfer_async(device, endpoint, data, length,
+                                                             callback);
+    } else if (device->connection == EGC_CONNECTION_BT) {
+        /* Only perform the operation if this is an output transfer;
+         * inputs are received over the HID interrupt L2CAP channel. */
+        if (endpoint & EGC_USB_ENDPOINT_IN)
+            return NULL;
+        _egc_bt_intr_transfer(device, data, length);
+    }
+    return NULL;
 }
 
 static bool timer_cb_wrapper(egc_input_device_t *device)
@@ -314,6 +327,12 @@ int egc_initialize(egc_input_device_cb added_cb, egc_input_device_cb removed_cb,
     s_device_removed_cb = removed_cb;
     s_callbacks_userdata = userdata;
     int rc = _egc_platform_backend.init(event_handler);
+    if (rc < 0)
+        return rc;
+
+#if WITH_BLUETOOTH
+    rc = _egc_bt_initialize();
+#endif
 
     return rc;
 }

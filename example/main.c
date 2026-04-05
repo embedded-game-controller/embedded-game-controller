@@ -179,6 +179,8 @@ int main(int argc, char **argv)
 
     u32 previously_down = 0;
 
+    egc_bt_start_scan();
+
     while (!quit_requested) {
         egc_wait_events(1000000);
 

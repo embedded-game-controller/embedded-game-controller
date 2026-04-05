@@ -23,6 +23,7 @@ endif()
 
 add_library(embedded-game-controller STATIC
     ${PLATFORM_SOURCES}
+    bluetooth.c
     egc.c
     usb_drivers/dragonrise.c
     usb_drivers/nintendo_switch.c

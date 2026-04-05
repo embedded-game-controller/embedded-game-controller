@@ -15,6 +15,7 @@ struct egc_device_driver_t {
     int (*set_rumble)(egc_input_device_t *device, bool rumble_on);
     bool (*timer)(egc_input_device_t *device);
     void (*intr_event)(egc_input_device_t *device, const void *data, u16 length);
+    void (*ctrl_event)(egc_input_device_t *device, const void *data, u16 length);
 };
 
 typedef struct {

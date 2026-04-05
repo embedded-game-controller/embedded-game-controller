@@ -15,6 +15,7 @@ project(
     LANGUAGES ASM C
 )
 
+option(WITH_BLUETOOTH "Support bluetooth controllers" ON)
 option(BUILD_EXAMPLE "Build example program" OFF)
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -48,6 +49,13 @@ add_compile_options(
     ${EXTRA_CFLAGS}
 )
 
+if(WITH_BLUETOOTH)
+    set(BUILD_EXAMPLE OFF CACHE BOOL "Build example program" FORCE)
+    add_subdirectory(bt-embedded)
+    link_libraries(bt-embedded)
+    include_directories(${CMAKE_SOURCE_DIR}/bt-embedded)
+    add_definitions(-DWITH_BLUETOOTH=1)
+endif()
 add_subdirectory(embedded-game-controller)
 
 if(CMAKE_SYSTEM_NAME MATCHES "Starlet")
