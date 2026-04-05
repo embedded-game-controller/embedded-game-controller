@@ -115,7 +115,12 @@ static void print_status(egc_input_device_t *device)
         printf("R trigger: %d ", device->state.gamepad.axes[EGC_GAMEPAD_AXIS_RIGHT_TRIGGER]);
     }
 
-    if (device->desc->available_axes) {
+    for (int i = 0; i < device->desc->num_accelerometers; i++) {
+        egc_accelerometer_t *accel = &device->state.gamepad.accelerometer[i];
+        printf("Accel%d (%d %d %d) ", i, accel->x, accel->y, accel->z);
+    }
+
+    if (device->desc->available_axes || device->desc->num_accelerometers > 0) {
         printf("\n");
     }
 }
