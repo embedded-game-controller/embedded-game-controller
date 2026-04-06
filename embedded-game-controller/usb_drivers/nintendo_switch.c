@@ -460,6 +460,21 @@ static void ns_init_step_next(egc_input_device_t *device)
     ns_init_step(device);
 }
 
+static void ns_prepare_calibration(struct ns_private_data_t *priv)
+{
+    for (int i = 0; i < 3; i++) {
+        priv->accel_divisor[i] = (priv->imu_cal.accel_scale[i] - priv->imu_cal.accel_offset[i]) *
+                                 EGC_ACCELEROMETER_RES_PER_G / JC_DFLT_ACCEL_SCALE;
+        priv->gyro_divisor[i] = priv->imu_cal.gyro_scale[i] - priv->imu_cal.gyro_offset[i];
+
+        /* this should never happen, but make sure we don't crash the driver */
+        if (priv->accel_divisor[i] == 0)
+            priv->accel_divisor[i] = 1;
+        if (priv->gyro_divisor[i] == 0)
+            priv->gyro_divisor[i] = 1;
+    }
+}
+
 static void ns_init_step_reply(egc_input_device_t *device, const void *data, u16 length)
 {
     struct ns_private_data_t *priv = PRIV(device);
@@ -478,11 +493,13 @@ static void ns_init_step_reply(egc_input_device_t *device, const void *data, u16
                     ns_copy_u16_from_le((u16 *)&priv->imu_cal, ((u16 *)user_cal) + 1,
                                         sizeof(ns_joycon_imu_cal_t) / sizeof(u16));
                 }
+                ns_prepare_calibration(priv);
             } else if (requested_address == htole16(JC_SPI_ADDR_IMU_CAL_FCT)) {
                 const ns_joycon_imu_cal_t *factory_cal =
                     &report->subcmd_reply.spi_reply.imu_cal_factory;
                 ns_copy_u16_from_le((u16 *)&priv->imu_cal, (u16 *)factory_cal,
                                     sizeof(ns_joycon_imu_cal_t) / sizeof(u16));
+                ns_prepare_calibration(priv);
             } else {
                 EGC_DEBUG("Got SPI address: %04x",
                           (int)le16toh(report->subcmd_reply.spi_reply.req.addr));
@@ -511,21 +528,6 @@ static int ns_get_string_descriptor(egc_input_device_t *device, u8 index)
     return 0;
 }
 
-static inline void ns_prepare_calibration(struct ns_private_data_t *priv)
-{
-    for (int i = 0; i < 3; i++) {
-        priv->accel_divisor[i] = (priv->imu_cal.accel_scale[i] - priv->imu_cal.accel_offset[i]) *
-                                 EGC_ACCELEROMETER_RES_PER_G / JC_DFLT_ACCEL_SCALE;
-        priv->gyro_divisor[i] = priv->imu_cal.gyro_scale[i] - priv->imu_cal.gyro_offset[i];
-
-        /* this should never happen, but make sure we don't crash the driver */
-        if (priv->accel_divisor[i] == 0)
-            priv->accel_divisor[i] = 1;
-        if (priv->gyro_divisor[i] == 0)
-            priv->gyro_divisor[i] = 1;
-    }
-}
-
 static int ns_init_step(egc_input_device_t *device)
 {
     struct ns_private_data_t *priv = PRIV(device);
@@ -535,7 +537,6 @@ static int ns_init_step(egc_input_device_t *device)
 
     if (priv->init_state >= NS_INITIALIZATION_COMPLETED) {
         EGC_DEBUG("init complete!");
-        ns_prepare_calibration(priv);
         /* Start reading data */
         ns_active_step(device);
     } else {
@@ -552,7 +553,7 @@ static int ns_init_step(egc_input_device_t *device)
             u8 buf[64] = { 0 };
             struct ns_subcmd_request *req = (struct ns_subcmd_request *)buf;
             req->subcmd_id = JC_SUBCMD_SPI_FLASH_READ;
-            req->spi_read.addr = le16toh(step->cal.addr);
+            req->spi_read.addr = htole16(step->cal.addr);
             req->spi_read.size = step->cal.size;
             rc = ns_send_subcmd(device, req, 5, ns_init_step_reply);
         } else if (step->type == NS_CODED_PAIR) {
