@@ -265,7 +265,6 @@ static const ns_coded_command_t s_initialization_commands[] = {
 typedef void (*ns_usb_cmd_cb_t)(egc_input_device_t *device, const void *data, u16 length);
 
 struct ns_private_data_t {
-    int update_count;
     ns_usb_cmd_cb_t usb_cmd_cb;
     ns_joycon_imu_cal_t imu_cal;
     s16 accel_divisor[3];
@@ -596,7 +595,6 @@ static void ns_driver_ops_intr_event(egc_input_device_t *device, const void *dat
             struct egc_input_state_t state = { 0 };
             if (parse_input_report(priv, data, &state)) {
                 egc_device_driver_report_input(device, &state);
-                priv->update_count++;
             }
         }
         break;
@@ -635,7 +633,6 @@ static int ns_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
     /* Init private state */
     priv->next_packet_num = 0;
     priv->init_state = -1;
-    priv->update_count = 0;
     priv->led_change_queued = false;
     priv->requested_rumble = false;
     for (int i = 0; i < 3; i++) {
