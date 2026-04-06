@@ -272,6 +272,7 @@ struct ns_private_data_t {
     s8 step_attempts;
     s8 init_state;
     u8 next_packet_num;
+    u8 pending_subcmd_id;
     u8 bt_mac_addr[6];
     u8 requested_leds;
     bool led_change_queued;
@@ -387,6 +388,8 @@ static int ns_send_subcmd(egc_input_device_t *device, struct ns_subcmd_request *
 {
     struct ns_private_data_t *priv = PRIV(device);
 
+    if (priv->pending_subcmd_id != 0)
+        return -1;
     req->output_id = JC_OUTPUT_RUMBLE_AND_SUBCMD;
     req->packet_num = priv->next_packet_num;
     if (++priv->next_packet_num > 0xf) {
@@ -394,7 +397,11 @@ static int ns_send_subcmd(egc_input_device_t *device, struct ns_subcmd_request *
     }
     memcpy(req->rumble_data, s_rumble_data, sizeof(s_rumble_data));
     priv->usb_cmd_cb = callback;
-    return ns_send_report(device, (u8 *)req, sizeof(*req) + size);
+    int rc = ns_send_report(device, (u8 *)req, sizeof(*req) + size);
+    if (rc >= 0) {
+        priv->pending_subcmd_id = req->subcmd_id;
+    }
+    return rc;
 }
 
 static int ns_rumble(egc_input_device_t *device)
@@ -584,6 +591,12 @@ static void ns_driver_ops_intr_event(egc_input_device_t *device, const void *dat
     case JC_INPUT_USB_RESPONSE:
     case JC_INPUT_SUBCMD_REPLY:
         EGC_DEBUG("rep ID %02x", report_id);
+        if (report_id == JC_INPUT_SUBCMD_REPLY) {
+            priv->pending_subcmd_id = 0;
+            if (priv->init_state >= NS_INITIALIZATION_COMPLETED) {
+                ns_active_step(device);
+            }
+        }
         if (priv->usb_cmd_cb) {
             ns_usb_cmd_cb_t callback = priv->usb_cmd_cb;
             priv->usb_cmd_cb = NULL;
@@ -636,6 +649,7 @@ static int ns_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
     priv->init_state = -1;
     priv->led_change_queued = false;
     priv->requested_rumble = false;
+    priv->pending_subcmd_id = 0;
     for (int i = 0; i < 3; i++) {
         priv->imu_cal.accel_offset[i] = 0;
         priv->imu_cal.accel_scale[i] = 0x4000;
@@ -654,7 +668,7 @@ static int ns_driver_ops_set_leds(egc_input_device_t *device, u32 leds)
 
     EGC_DEBUG("leds: %" PRIu32, leds);
     priv->requested_leds = leds;
-    if (priv->init_state < NS_INITIALIZATION_COMPLETED) {
+    if (priv->init_state < NS_INITIALIZATION_COMPLETED || priv->pending_subcmd_id != 0) {
         priv->led_change_queued = true;
     } else {
         ns_set_player_leds(device, 0, priv->requested_leds);
@@ -668,7 +682,7 @@ static int ns_driver_ops_set_rumble(egc_input_device_t *device, bool rumble_on)
     EGC_DEBUG("on: %d", rumble_on);
     if (rumble_on != priv->requested_rumble) {
         priv->requested_rumble = rumble_on;
-        if (priv->init_state >= NS_INITIALIZATION_COMPLETED) {
+        if (priv->init_state >= NS_INITIALIZATION_COMPLETED && priv->pending_subcmd_id == 0) {
             ns_rumble(device);
         }
     }
