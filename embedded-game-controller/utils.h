@@ -7,9 +7,10 @@
 
 #include "egc_types.h"
 
-#ifndef le16toh
-#define le16toh(x) __builtin_bswap16(x)
-#define htole16(x) __builtin_bswap16(x)
+#if __DEVKITPRO__
+#include <sys/endian.h>
+#else
+#include <endian.h>
 #endif
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
