@@ -542,6 +542,14 @@ static int ns_init_step(egc_input_device_t *device)
 
     EGC_DEBUG("state %d", priv->init_state);
 
+    /* If we are connected via BT, skip all steps that are USB-specific */
+    if (device->connection == EGC_CONNECTION_BT) {
+        ns_coded_command_type type;
+        while (type = s_initialization_commands[priv->init_state].type,
+               type == NS_CODED_COMMAND || type == NS_CODED_GET_DESCRIPTOR)
+            priv->init_state++;
+    }
+
     if (priv->init_state >= NS_INITIALIZATION_COMPLETED) {
         EGC_DEBUG("init complete!");
         /* Start reading data */
