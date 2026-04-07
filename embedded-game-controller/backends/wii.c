@@ -8,6 +8,12 @@
 #include <tuxedo/ppc/clock.h>
 #include <tuxedo/tick.h>
 
+#ifdef WITH_BLUETOOTH
+#include <bt-embedded/backends/wii.h>
+
+#include "bluetooth.h"
+#endif
+
 #include "platform.h"
 #include "utils.h"
 
@@ -34,6 +40,7 @@ typedef struct {
 typedef struct {
     /* This must be the first member, since we use it for casting */
     egc_device_priv_t priv;
+    egc_device_description_t desc;
 
     union {
         egc_usb_device_t usb;
@@ -192,6 +199,35 @@ static const egc_usb_transfer_t *wii_intr_transfer_async(egc_input_device_t *inp
     }
     return &t->t;
 }
+
+#if WITH_BLUETOOTH
+static egc_input_device_t *wii_bt_device_alloc(const egc_bt_device_desc_t *desc)
+{
+    wii_device_t *device = get_free_device_slot();
+    if (!device)
+        return NULL;
+
+    memset(device, 0, sizeof(*device));
+    device->desc.vendor_id = desc->vendor_id;
+    device->desc.product_id = desc->product_id;
+    return PUB(device);
+}
+
+static int wii_bt_device_add(egc_input_device_t *input_device)
+{
+    wii_device_t *device = wii_device_from_input_device(input_device);
+    return s_event_handler(input_device, EGC_EVENT_DEVICE_ADDED, device->desc.vendor_id,
+                           device->desc.product_id);
+}
+
+static void wii_bt_device_free(egc_input_device_t *input_device)
+{
+    wii_device_t *device = wii_device_from_input_device(input_device);
+
+    s_event_handler(PUB(device), EGC_EVENT_DEVICE_REMOVED);
+    wii_device_free(device);
+}
+#endif
 
 /* This is called from an interrupt: do nothing in here, just send the event to
  * the worker thread */
@@ -397,8 +433,8 @@ static int process_events(u32 timeout_us)
                 }
             }
         } else {
-            EGC_DEBUG("");
             /* Find if this is a timer */
+            bool found = false;
             for (int i = 0; i < ARRAY_SIZE(s_devices); i++) {
                 wii_device_t *device = &s_devices[i];
                 if (PUB(device)->connection == EGC_CONNECTION_DISCONNECTED)
@@ -410,8 +446,15 @@ static int process_events(u32 timeout_us)
                     if (!keep) {
                         KTickTaskStop(&device->timer_task);
                     }
+                    found = true;
+                    break;
                 }
             }
+#if WITH_BLUETOOTH
+            if (!found) {
+                bte_backend_wii_process_events();
+            }
+#endif
         }
     }
 
@@ -436,6 +479,9 @@ static int wii_init(egc_event_cb event_handler)
     for (int i = 0; i < ARRAY_SIZE(s_devices); i++)
         PUB(&s_devices[i])->connection = EGC_CONNECTION_DISCONNECTED;
 
+#if WITH_BLUETOOTH
+    bte_backend_wii_set_mailbox(&s_worker_queue);
+#endif
     return update_device_list();
 }
 
@@ -489,6 +535,13 @@ const egc_platform_backend_t _egc_platform_backend = {
         .ctrl_transfer_async = wii_ctrl_transfer_async,
         .intr_transfer_async = wii_intr_transfer_async,
     },
+#if WITH_BLUETOOTH
+    .bt = {
+        .device_alloc = wii_bt_device_alloc,
+        .device_add = wii_bt_device_add,
+        .device_free = wii_bt_device_free,
+    },
+#endif
     .init = wii_init,
     .alloc_desc = wii_alloc_desc,
     .set_timer = wii_set_timer,
