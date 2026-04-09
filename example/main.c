@@ -196,14 +196,16 @@ int main(int argc, char **argv)
                 print_status(device);
 
             if (device->state.gamepad.buttons & (1 << EGC_GAMEPAD_BUTTON_SOUTH)) {
-                if (device->desc->num_leds > 0 && released & (1 << EGC_GAMEPAD_BUTTON_DPAD_RIGHT)) {
+                if (device->desc->num_leds > 0 &&
+                    released & (1 << EGC_GAMEPAD_BUTTON_RIGHT_SHOULDER)) {
                     led = (led + 1) % device->desc->num_leds;
                     egc_input_device_set_leds(device, 1 << led);
                 }
 
                 if (device->desc->has_rumble) {
                     u32 new_intensity =
-                        device->state.gamepad.buttons & (1 << EGC_GAMEPAD_BUTTON_DPAD_UP) ? 1 : 0;
+                        device->state.gamepad.buttons & (1 << EGC_GAMEPAD_BUTTON_LEFT_SHOULDER) ? 1
+                                                                                                : 0;
                     if (new_intensity != rumble_intensity) {
                         egc_input_device_set_rumble(device, new_intensity);
                         rumble_intensity = new_intensity;
