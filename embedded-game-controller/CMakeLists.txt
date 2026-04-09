@@ -17,8 +17,13 @@ elseif(LIBUSB_FOUND)
         backends/libusb.c
     )
     list(APPEND EXTRA_LIBS PkgConfig::LIBUSB)
+    set(PC_REQUIRES "${PC_REQUIRES} libusb-1.0")
 else()
     message(FATAL_ERROR "No available platform backend")
+endif()
+
+if(WITH_BLUETOOTH)
+    set(PC_REQUIRES "${PC_REQUIRES} bt-embedded")
 endif()
 
 add_library(embedded-game-controller STATIC
@@ -42,3 +47,24 @@ target_link_options(embedded-game-controller PRIVATE
 target_link_libraries(embedded-game-controller PRIVATE
     ${EXTRA_LIBS}
 )
+
+set(PUBLIC_HEADERS
+    egc.h
+    egc_types.h
+)
+
+set_target_properties(embedded-game-controller PROPERTIES
+    PUBLIC_HEADER "${PUBLIC_HEADERS}"
+)
+
+install(TARGETS embedded-game-controller
+    LIBRARY
+    ARCHIVE
+    RUNTIME
+    PUBLIC_HEADER DESTINATION "include/embedded-game-controller"
+)
+
+configure_file(../embedded-game-controller.pc.in embedded-game-controller.pc @ONLY)
+
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/embedded-game-controller.pc
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")

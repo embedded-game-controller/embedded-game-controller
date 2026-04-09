@@ -1,0 +1,10 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: embedded-game-controller
+Description: Use USB and bluetooth game controllers in embedded devices
+Version: @PROJECT_VERSION@
+Libs: -L${libdir} -lembedded-game-controller @PC_EXTRA_LIBS@
+Requires: @PC_REQUIRES@
+Cflags: -I${includedir}
