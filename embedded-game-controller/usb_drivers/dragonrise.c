@@ -62,8 +62,8 @@ static const egc_gamepad_button_e s_button_map[DR_BUTTON_COUNT] = {
     [DR_BUTTON_4] = EGC_GAMEPAD_BUTTON_WEST,
     [DR_BUTTON_L1] = EGC_GAMEPAD_BUTTON_LEFT_SHOULDER,
     [DR_BUTTON_R1] = EGC_GAMEPAD_BUTTON_RIGHT_SHOULDER,
-    [DR_BUTTON_L2] = EGC_GAMEPAD_BUTTON_LEFT_PADDLE1,
-    [DR_BUTTON_R2] = EGC_GAMEPAD_BUTTON_RIGHT_PADDLE1,
+    [DR_BUTTON_L2] = EGC_GAMEPAD_BUTTON_INVALID,
+    [DR_BUTTON_R2] = EGC_GAMEPAD_BUTTON_INVALID,
     [DR_BUTTON_SELECT] = EGC_GAMEPAD_BUTTON_BACK,
     [DR_BUTTON_START] = EGC_GAMEPAD_BUTTON_START,
     [DR_BUTTON_JOY1] = EGC_GAMEPAD_BUTTON_LEFT_STICK,
@@ -85,8 +85,6 @@ static const egc_device_description_t s_device_description = {
         BIT(EGC_GAMEPAD_BUTTON_WEST) |
         BIT(EGC_GAMEPAD_BUTTON_LEFT_SHOULDER) |
         BIT(EGC_GAMEPAD_BUTTON_RIGHT_SHOULDER) |
-        BIT(EGC_GAMEPAD_BUTTON_LEFT_PADDLE1) |
-        BIT(EGC_GAMEPAD_BUTTON_RIGHT_PADDLE1) |
         BIT(EGC_GAMEPAD_BUTTON_BACK) |
         BIT(EGC_GAMEPAD_BUTTON_START) |
         BIT(EGC_GAMEPAD_BUTTON_LEFT_STICK) |
@@ -95,7 +93,9 @@ static const egc_device_description_t s_device_description = {
         BIT(EGC_GAMEPAD_AXIS_LEFTX) |
         BIT(EGC_GAMEPAD_AXIS_LEFTY) |
         BIT(EGC_GAMEPAD_AXIS_RIGHTX) |
-        BIT(EGC_GAMEPAD_AXIS_RIGHTY),
+        BIT(EGC_GAMEPAD_AXIS_RIGHTY) |
+        BIT(EGC_GAMEPAD_AXIS_LEFT_TRIGGER) |
+        BIT(EGC_GAMEPAD_AXIS_RIGHT_TRIGGER),
     /* clang-format on */
     .type = EGC_DEVICE_TYPE_GAMEPAD,
     .num_touch_points = 0,
@@ -161,6 +161,10 @@ static void dr_driver_ops_intr_event(egc_input_device_t *device, const void *dat
         state.gamepad.axes[EGC_GAMEPAD_AXIS_LEFTY] = egc_u8_to_s16(axes[DR_ANALOG_AXIS_LEFT_Y]);
         state.gamepad.axes[EGC_GAMEPAD_AXIS_RIGHTX] = egc_u8_to_s16(axes[DR_ANALOG_AXIS_RIGHT_X]);
         state.gamepad.axes[EGC_GAMEPAD_AXIS_RIGHTY] = egc_u8_to_s16(axes[DR_ANALOG_AXIS_RIGHT_Y]);
+        state.gamepad.axes[EGC_GAMEPAD_AXIS_LEFT_TRIGGER] =
+            ((buttons >> DR_BUTTON_L2) & 1) * INT16_MAX;
+        state.gamepad.axes[EGC_GAMEPAD_AXIS_RIGHT_TRIGGER] =
+            ((buttons >> DR_BUTTON_R2) & 1) * INT16_MAX;
 
         egc_device_driver_report_input(device, &state);
     }
