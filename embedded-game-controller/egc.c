@@ -174,8 +174,9 @@ u32 egc_device_driver_map_buttons(u32 buttons, int count, const egc_gamepad_butt
 {
     u32 ret = 0;
     for (int i = 0; i < count; i++) {
-        if (buttons & (1 << i)) {
-            ret |= 1 << map[i];
+        egc_gamepad_button_e button_index = map[i];
+        if (button_index < EGC_GAMEPAD_BUTTON_COUNT && buttons & (1 << i)) {
+            ret |= 1 << button_index;
         }
     }
     return ret;

@@ -55,7 +55,8 @@ typedef enum {
     EGC_GAMEPAD_BUTTON_MISC4,        /**< Additional button */
     EGC_GAMEPAD_BUTTON_MISC5,        /**< Additional button */
     EGC_GAMEPAD_BUTTON_MISC6,        /**< Additional button */
-    EGC_GAMEPAD_BUTTON_COUNT
+    EGC_GAMEPAD_BUTTON_COUNT,
+    EGC_GAMEPAD_BUTTON_INVALID = 0xff
 } egc_gamepad_button_e;
 /* Each enum value corresponds to a bit in a 32 bit-wide field */
 static_assert(EGC_GAMEPAD_BUTTON_COUNT <= 32);
