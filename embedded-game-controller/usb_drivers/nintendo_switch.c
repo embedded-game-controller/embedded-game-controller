@@ -189,8 +189,8 @@ static const egc_gamepad_button_e s_button_map_pro[NS_BUTTON_COUNT] = {
     [NS_BUTTON_Y] = EGC_GAMEPAD_BUTTON_WEST,
     [NS_BUTTON_L] = EGC_GAMEPAD_BUTTON_LEFT_SHOULDER,
     [NS_BUTTON_R] = EGC_GAMEPAD_BUTTON_RIGHT_SHOULDER,
-    [NS_BUTTON_ZL] = EGC_GAMEPAD_BUTTON_LEFT_PADDLE1,
-    [NS_BUTTON_ZR] = EGC_GAMEPAD_BUTTON_RIGHT_PADDLE1,
+    [NS_BUTTON_ZL] = EGC_GAMEPAD_BUTTON_INVALID,
+    [NS_BUTTON_ZR] = EGC_GAMEPAD_BUTTON_INVALID,
     [NS_BUTTON_MINUS] = EGC_GAMEPAD_BUTTON_BACK,
     [NS_BUTTON_PLUS] = EGC_GAMEPAD_BUTTON_START,
     [NS_BUTTON_LSTICK] = EGC_GAMEPAD_BUTTON_LEFT_STICK,
@@ -207,6 +207,8 @@ static const egc_gamepad_button_e s_button_map_ljc[NS_BUTTON_COUNT] = {
     /* We ignore the shoulder buttons on the bottom, as they can easily be pressed accidentally */
     [NS_BUTTON_SL_L] = EGC_GAMEPAD_BUTTON_LEFT_SHOULDER,
     [NS_BUTTON_SR_L] = EGC_GAMEPAD_BUTTON_RIGHT_SHOULDER,
+    [NS_BUTTON_L] = EGC_GAMEPAD_BUTTON_INVALID,
+    [NS_BUTTON_ZL] = EGC_GAMEPAD_BUTTON_INVALID,
     [NS_BUTTON_MINUS] = EGC_GAMEPAD_BUTTON_START,
     [NS_BUTTON_LSTICK] = EGC_GAMEPAD_BUTTON_LEFT_STICK,
     [NS_BUTTON_CAP] = EGC_GAMEPAD_BUTTON_GUIDE,
@@ -220,6 +222,8 @@ static const egc_gamepad_button_e s_button_map_rjc[NS_BUTTON_COUNT] = {
     /* We ignore the shoulder buttons on the bottom, as they can easily be pressed accidentally */
     [NS_BUTTON_SL_R] = EGC_GAMEPAD_BUTTON_LEFT_SHOULDER,
     [NS_BUTTON_SR_R] = EGC_GAMEPAD_BUTTON_RIGHT_SHOULDER,
+    [NS_BUTTON_R] = EGC_GAMEPAD_BUTTON_INVALID,
+    [NS_BUTTON_ZR] = EGC_GAMEPAD_BUTTON_INVALID,
     [NS_BUTTON_PLUS] = EGC_GAMEPAD_BUTTON_START,
     [NS_BUTTON_RSTICK] = EGC_GAMEPAD_BUTTON_LEFT_STICK,
     [NS_BUTTON_HOME] = EGC_GAMEPAD_BUTTON_GUIDE,
@@ -327,8 +331,6 @@ static const egc_device_description_t s_device_description_pro = {
         BIT(EGC_GAMEPAD_BUTTON_WEST) |
         BIT(EGC_GAMEPAD_BUTTON_LEFT_SHOULDER) |
         BIT(EGC_GAMEPAD_BUTTON_RIGHT_SHOULDER) |
-        BIT(EGC_GAMEPAD_BUTTON_LEFT_PADDLE1) |
-        BIT(EGC_GAMEPAD_BUTTON_RIGHT_PADDLE1) |
         BIT(EGC_GAMEPAD_BUTTON_BACK) |
         BIT(EGC_GAMEPAD_BUTTON_START) |
         BIT(EGC_GAMEPAD_BUTTON_GUIDE) |
@@ -339,7 +341,9 @@ static const egc_device_description_t s_device_description_pro = {
         BIT(EGC_GAMEPAD_AXIS_LEFTX) |
         BIT(EGC_GAMEPAD_AXIS_LEFTY) |
         BIT(EGC_GAMEPAD_AXIS_RIGHTX) |
-        BIT(EGC_GAMEPAD_AXIS_RIGHTY),
+        BIT(EGC_GAMEPAD_AXIS_RIGHTY) |
+        BIT(EGC_GAMEPAD_AXIS_LEFT_TRIGGER) |
+        BIT(EGC_GAMEPAD_AXIS_RIGHT_TRIGGER),
     /* clang-format on */
     .type = EGC_DEVICE_TYPE_GAMEPAD,
     .num_touch_points = 0,
@@ -453,6 +457,10 @@ static bool parse_input_report(egc_input_device_t *device, const ns_input_report
             egc_device_driver_map_buttons(buttons, NS_BUTTON_COUNT, s_button_map_pro);
         ns_get_analog_axis(report->left_stick, &state->gamepad.axes[NS_ANALOG_AXIS_LEFT_X]);
         ns_get_analog_axis(report->right_stick, &state->gamepad.axes[NS_ANALOG_AXIS_RIGHT_X]);
+        state->gamepad.axes[EGC_GAMEPAD_AXIS_LEFT_TRIGGER] =
+            ((buttons >> NS_BUTTON_ZL) & 1) * INT16_MAX;
+        state->gamepad.axes[EGC_GAMEPAD_AXIS_RIGHT_TRIGGER] =
+            ((buttons >> NS_BUTTON_ZR) & 1) * INT16_MAX;
     } else if (device->desc->product_id == NS_PID_LJC) {
         state->gamepad.buttons =
             egc_device_driver_map_buttons(buttons, NS_BUTTON_COUNT, s_button_map_ljc);
