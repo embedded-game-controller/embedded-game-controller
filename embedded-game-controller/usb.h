@@ -1,6 +1,8 @@
 #ifndef EGC_USB_H
 #define EGC_USB_H
 
+#include <assert.h>
+
 #include "egc_types.h"
 
 /* Constants */
@@ -152,20 +154,22 @@ typedef struct egc_usb_hiddesc_t {
 
 typedef struct egc_input_device_t egc_input_device_t;
 
-typedef enum egc_usb_transfer_type_e {
+typedef enum ATTRIBUTE_PACKED {
     EGC_USB_TRANSFER_CONTROL,
     EGC_USB_TRANSFER_ISOCHRONOUS,
     EGC_USB_TRANSFER_BULK,
     EGC_USB_TRANSFER_INTERRUPT,
 } egc_usb_transfer_type_e;
+static_assert(sizeof(egc_usb_transfer_type_e) == 1);
 
-typedef enum egc_usb_transfer_status_e {
+typedef enum ATTRIBUTE_PACKED {
     EGC_USB_TRANSFER_STATUS_UNSET = 0,
     EGC_USB_TRANSFER_STATUS_WAITING,
     EGC_USB_TRANSFER_STATUS_SUBMITTED,
     EGC_USB_TRANSFER_STATUS_COMPLETED,
     EGC_USB_TRANSFER_STATUS_ERROR,
 } egc_usb_transfer_status_e;
+static_assert(sizeof(egc_usb_transfer_status_e) == 1);
 
 typedef struct egc_usb_transfer_t egc_usb_transfer_t;
 

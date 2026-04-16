@@ -15,14 +15,15 @@ typedef struct egc_device_driver_t egc_device_driver_t;
 #define EGC_RUMBLE_MAX 0x7fffffff
 #define EGC_RUMBLE_OFF 0
 
-typedef enum {
+typedef enum ATTRIBUTE_PACKED {
     EGC_DEVICE_TYPE_GAMEPAD,
     EGC_DEVICE_TYPE_GUITAR,
     EGC_DEVICE_TYPE_DRUMS,
 } egc_device_type_e;
+static_assert(sizeof(egc_device_type_e) == 1);
 
 /* Any similarity with SDL3's SDL_GamepadButton is completely *not* accidental. */
-typedef enum {
+typedef enum ATTRIBUTE_PACKED {
     EGC_GAMEPAD_BUTTON_SOUTH, /**< Bottom face button (e.g. Xbox A button) */
     EGC_GAMEPAD_BUTTON_EAST,  /**< Right face button (e.g. Xbox B button) */
     EGC_GAMEPAD_BUTTON_WEST,  /**< Left face button (e.g. Xbox X button) */
@@ -60,8 +61,9 @@ typedef enum {
 } egc_gamepad_button_e;
 /* Each enum value corresponds to a bit in a 32 bit-wide field */
 static_assert(EGC_GAMEPAD_BUTTON_COUNT <= 32);
+static_assert(sizeof(egc_gamepad_button_e) == 1);
 
-typedef enum {
+typedef enum ATTRIBUTE_PACKED {
     EGC_GAMEPAD_AXIS_LEFTX,
     EGC_GAMEPAD_AXIS_LEFTY,
     EGC_GAMEPAD_AXIS_RIGHTX,
@@ -70,6 +72,7 @@ typedef enum {
     EGC_GAMEPAD_AXIS_RIGHT_TRIGGER,
     EGC_GAMEPAD_AXIS_COUNT
 } egc_gamepad_axis_e;
+static_assert(sizeof(egc_gamepad_axis_e) == 1);
 
 /* Resolution is 4096, therefore the range is +/- 8g */
 #define EGC_ACCELEROMETER_RES_PER_G 4096
@@ -79,6 +82,7 @@ typedef struct {
     s16 y;
     s16 z;
 } ATTRIBUTE_PACKED egc_accelerometer_t;
+static_assert(sizeof(egc_accelerometer_t) == 6);
 
 /* Range is 0-32767. A negative x means that there is no touch */
 #define EGC_GAMEPAD_TOUCH_RES 0x7fff
@@ -87,6 +91,7 @@ typedef struct {
     s16 x;
     s16 y;
 } ATTRIBUTE_PACKED egc_point_t;
+static_assert(sizeof(egc_point_t) == 4);
 
 typedef struct egc_input_state_t {
     /* TODO: maybe add a timestamp or a counter, to let the client know if the
@@ -102,11 +107,12 @@ typedef struct egc_input_state_t {
     };
 } egc_input_state_t;
 
-typedef enum {
+typedef enum ATTRIBUTE_PACKED {
     EGC_CONNECTION_DISCONNECTED,
     EGC_CONNECTION_USB,
     EGC_CONNECTION_BT,
 } egc_connection_e;
+static_assert(sizeof(egc_connection_e) == 1);
 
 typedef struct egc_device_description_t {
     u16 vendor_id;

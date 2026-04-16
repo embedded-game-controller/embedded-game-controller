@@ -5,11 +5,12 @@
 #include "internals.h"
 #include "usb_backend.h"
 
-typedef enum egc_event_e {
+typedef enum ATTRIBUTE_PACKED {
     EGC_EVENT_DEVICE_ADDED,
     EGC_EVENT_DEVICE_REMOVED,
     EGC_EVENT_DEVICE_INPUT,
 } egc_event_e;
+static_assert(sizeof(egc_event_e) == 1);
 
 typedef int (*egc_event_cb)(egc_input_device_t *device, egc_event_e event, ...);
 /* Return false if the timer must be destroyed */

@@ -237,7 +237,7 @@ enum ns_analog_axis_e {
     NS_ANALOG_AXIS__NUM
 };
 
-typedef enum {
+typedef enum ATTRIBUTE_PACKED {
     NS_CODED_COMMAND,
     NS_CODED_SUBCOMMAND,
     NS_CODED_GET_DESCRIPTOR,
