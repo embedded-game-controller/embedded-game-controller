@@ -438,9 +438,9 @@ static inline void ns_get_accel(const struct ns_private_data_t *priv,
     x /= divisor;
     y /= divisor;
     z /= divisor;
-    accel->x = x * EGC_ACCELEROMETER_RES_PER_G / (priv->accel_divisor[0]);
-    accel->y = y * EGC_ACCELEROMETER_RES_PER_G / (priv->accel_divisor[1]);
-    accel->z = z * EGC_ACCELEROMETER_RES_PER_G / (priv->accel_divisor[2]);
+    accel->z = x * EGC_ACCELEROMETER_RES_PER_G / (priv->accel_divisor[0]);
+    accel->x = y * EGC_ACCELEROMETER_RES_PER_G / (priv->accel_divisor[1]);
+    accel->y = z * EGC_ACCELEROMETER_RES_PER_G / (priv->accel_divisor[2]);
 }
 
 static bool parse_input_report(egc_input_device_t *device, const ns_input_report_t *report,
@@ -452,6 +452,8 @@ static bool parse_input_report(egc_input_device_t *device, const ns_input_report
         return false;
     }
     u32 buttons = ns_get_buttons(report->button_status);
+    egc_accelerometer_t *accel = &state->gamepad.accelerometer[0];
+    ns_get_accel(priv, report, accel);
     if (device->desc->product_id == NS_PID_PRO) {
         state->gamepad.buttons =
             egc_device_driver_map_buttons(buttons, NS_BUTTON_COUNT, s_button_map_pro);
@@ -469,6 +471,10 @@ static bool parse_input_report(egc_input_device_t *device, const ns_input_report
         s16 original_x = state->gamepad.axes[NS_ANALOG_AXIS_LEFT_X];
         state->gamepad.axes[NS_ANALOG_AXIS_LEFT_X] = -state->gamepad.axes[NS_ANALOG_AXIS_LEFT_Y];
         state->gamepad.axes[NS_ANALOG_AXIS_LEFT_Y] = original_x;
+
+        float tmp = accel->x;
+        accel->x = accel->z;
+        accel->z = -tmp;
     } else if (device->desc->product_id == NS_PID_RJC) {
         state->gamepad.buttons =
             egc_device_driver_map_buttons(buttons, NS_BUTTON_COUNT, s_button_map_rjc);
@@ -477,8 +483,11 @@ static bool parse_input_report(egc_input_device_t *device, const ns_input_report
         s16 original_x = state->gamepad.axes[NS_ANALOG_AXIS_LEFT_X];
         state->gamepad.axes[NS_ANALOG_AXIS_LEFT_X] = state->gamepad.axes[NS_ANALOG_AXIS_LEFT_Y];
         state->gamepad.axes[NS_ANALOG_AXIS_LEFT_Y] = -original_x;
+        float tmp = accel->x;
+        accel->x = -accel->z;
+        accel->z = -tmp;
+        accel->y = -accel->y;
     }
-    ns_get_accel(priv, report, &state->gamepad.accelerometer[0]);
     return true;
 }
 
