@@ -77,6 +77,13 @@ static_assert(sizeof(egc_gamepad_axis_e) == 1);
 /* Resolution is 4096, therefore the range is +/- 8g */
 #define EGC_ACCELEROMETER_RES_PER_G 4096
 
+/*
+ * Axes are defined like in SDL (https://wiki.libsdl.org/SDL3/SDL_SensorType):
+ * - x: measures left (-) / right (+)
+ * - y: gravity: when y is EGC_ACCELEROMETER_RES_PER_G, it means that the
+ *   device is at rest
+ * - z: measures farther (-) / closer (+)
+ */
 typedef struct {
     s16 x;
     s16 y;
