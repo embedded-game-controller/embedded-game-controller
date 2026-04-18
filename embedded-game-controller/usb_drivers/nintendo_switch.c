@@ -301,7 +301,6 @@ typedef void (*ns_usb_cmd_cb_t)(egc_input_device_t *device, const void *data, u1
 
 struct ns_private_data_t {
     ns_usb_cmd_cb_t usb_cmd_cb;
-    ns_joycon_imu_cal_t imu_cal;
     s16 accel_divisor[3];
     s16 gyro_divisor[3];
     s8 step_attempts;
@@ -589,12 +588,13 @@ static void ns_init_step_next(egc_input_device_t *device)
     ns_init_step(device);
 }
 
-static void ns_prepare_calibration(struct ns_private_data_t *priv)
+static void ns_prepare_imu_calibration(struct ns_private_data_t *priv,
+                                       const ns_joycon_imu_cal_t *imu_cal)
 {
     for (int i = 0; i < 3; i++) {
-        priv->accel_divisor[i] = (priv->imu_cal.accel_scale[i] - priv->imu_cal.accel_offset[i]) *
+        priv->accel_divisor[i] = (imu_cal->accel_scale[i] - imu_cal->accel_offset[i]) *
                                  EGC_ACCELEROMETER_RES_PER_G / JC_DFLT_ACCEL_SCALE;
-        priv->gyro_divisor[i] = priv->imu_cal.gyro_scale[i] - priv->imu_cal.gyro_offset[i];
+        priv->gyro_divisor[i] = imu_cal->gyro_scale[i] - imu_cal->gyro_offset[i];
 
         /* this should never happen, but make sure we don't crash the driver */
         if (priv->accel_divisor[i] == 0)
@@ -619,16 +619,18 @@ static void ns_init_step_reply(egc_input_device_t *device, const void *data, u16
                     &report->subcmd_reply.spi_reply.imu_cal_user;
 
                 if (user_cal->magic == htole16(JC_CAL_USR_MAGIC)) {
-                    ns_copy_u16_from_le((u16 *)&priv->imu_cal, ((u16 *)user_cal) + 1,
+                    ns_joycon_imu_cal_t imu_cal;
+                    ns_copy_u16_from_le((u16 *)&imu_cal, ((u16 *)user_cal) + 1,
                                         sizeof(ns_joycon_imu_cal_t) / sizeof(u16));
+                    ns_prepare_imu_calibration(priv, &imu_cal);
                 }
-                ns_prepare_calibration(priv);
             } else if (requested_address == htole16(JC_SPI_ADDR_IMU_CAL_FCT)) {
                 const ns_joycon_imu_cal_t *factory_cal =
                     &report->subcmd_reply.spi_reply.imu_cal_factory;
-                ns_copy_u16_from_le((u16 *)&priv->imu_cal, (u16 *)factory_cal,
+                ns_joycon_imu_cal_t imu_cal;
+                ns_copy_u16_from_le((u16 *)&imu_cal, (u16 *)factory_cal,
                                     sizeof(ns_joycon_imu_cal_t) / sizeof(u16));
-                ns_prepare_calibration(priv);
+                ns_prepare_imu_calibration(priv, &imu_cal);
             } else {
                 EGC_DEBUG("Got SPI address: %04x",
                           (int)le16toh(report->subcmd_reply.spi_reply.req.addr));
@@ -795,13 +797,16 @@ static int ns_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
     priv->led_change_queued = true;
     priv->requested_rumble = false;
     priv->pending_subcmd_id = 0;
+
+    ns_joycon_imu_cal_t imu_cal;
     for (int i = 0; i < 3; i++) {
-        priv->imu_cal.accel_offset[i] = 0;
-        priv->imu_cal.accel_scale[i] = 0x4000;
-        priv->imu_cal.gyro_offset[i] = 0;
+        imu_cal.accel_offset[i] = 0;
+        imu_cal.accel_scale[i] = 0x4000;
+        imu_cal.gyro_offset[i] = 0;
         /* Value taken from Linux driver */
-        priv->imu_cal.gyro_scale[i] = 13371;
+        imu_cal.gyro_scale[i] = 13371;
     }
+    ns_prepare_imu_calibration(priv, &imu_cal);
 
     ns_init_step_next(device);
     return 0;
