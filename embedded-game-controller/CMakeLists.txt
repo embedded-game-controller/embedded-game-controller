@@ -31,6 +31,7 @@ add_library(embedded-game-controller STATIC
     bluetooth.c
     egc.c
     usb_drivers/dragonrise.c
+    usb_drivers/iine_pro_max.c
     usb_drivers/nintendo_switch.c
     usb_drivers/sony_ds3.c
     usb_drivers/sony_ds4.c
