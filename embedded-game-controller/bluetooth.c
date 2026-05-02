@@ -1,3 +1,8 @@
+#include <errno.h>
+#include <stddef.h>
+
+#include "bluetooth.h"
+
 #if WITH_BLUETOOTH
 
 #include <bt-embedded/client.h>
@@ -5,11 +10,9 @@
 #include <bt-embedded/l2cap.h>
 #include <bt-embedded/services/hid.h>
 #include <bt-embedded/services/sdp.h>
-#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 
-#include "bluetooth.h"
 #include "bt_backend.h"
 #include "egc.h"
 #include "platform.h"
@@ -434,6 +437,18 @@ int egc_bt_stop_scan()
 #include <errno.h>
 
 #include "egc.h"
+
+const egc_usb_transfer_t *_egc_bt_ctrl_transfer(egc_input_device_t *device, u8 requesttype,
+                                                u8 request, u16 value, u16 index, void *data,
+                                                u16 length, egc_transfer_cb callback)
+{
+    return NULL;
+}
+
+int _egc_bt_intr_transfer(egc_input_device_t *device, void *data, u16 length)
+{
+    return -ENOSYS;
+}
 
 int egc_bt_start_scan()
 {
