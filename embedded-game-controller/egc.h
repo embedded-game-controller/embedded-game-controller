@@ -65,10 +65,10 @@ static_assert(sizeof(egc_gamepad_button_e) == 1);
 
 typedef enum ATTRIBUTE_PACKED {
     EGC_GAMEPAD_AXIS_LEFTX,
-    EGC_GAMEPAD_AXIS_LEFTY,
+    EGC_GAMEPAD_AXIS_LEFTY, /* Y down is positive */
     EGC_GAMEPAD_AXIS_RIGHTX,
-    EGC_GAMEPAD_AXIS_RIGHTY,
-    EGC_GAMEPAD_AXIS_LEFT_TRIGGER,
+    EGC_GAMEPAD_AXIS_RIGHTY,       /* Y down is positive */
+    EGC_GAMEPAD_AXIS_LEFT_TRIGGER, /* 0 (not pressed) - INT_MAX */
     EGC_GAMEPAD_AXIS_RIGHT_TRIGGER,
     EGC_GAMEPAD_AXIS_COUNT
 } egc_gamepad_axis_e;

@@ -71,6 +71,58 @@ static inline s16 egc_u8_to_s16(u8 value)
     return (value << 8 | value) - 0x8000;
 }
 
+/* Additional private values for the axis field: */
+#define EGC_GAMEPAD_AXIS_DPADX (EGC_GAMEPAD_AXIS_COUNT + 1)
+#define EGC_GAMEPAD_AXIS_DPADY (EGC_GAMEPAD_AXIS_COUNT + 2)
+
+/* Additional private values for the button field: */
+#define EGC_GAMEPAD_BUTTON_LEFT_TRIGGER  (EGC_GAMEPAD_BUTTON_COUNT + 1)
+#define EGC_GAMEPAD_BUTTON_RIGHT_TRIGGER (EGC_GAMEPAD_BUTTON_COUNT + 2)
+
+typedef struct {
+    u8 length_bits;
+} EgcInputReportElementSkip;
+
+typedef struct {
+    egc_gamepad_axis_e axis;
+} EgcInputReportElementAxis;
+
+typedef struct {
+    egc_gamepad_button_e button[4];
+} EgcInputReportElementButton4;
+
+typedef struct {
+    egc_gamepad_button_e button[8];
+} EgcInputReportElementButton8;
+
+/* Lowest Power of 2 greater than or equal to x.  Assumes integer x greater
+ * than 0.
+ * From https://stackoverflow.com/questions/23954650
+ */
+#define LPO2(x) (1 << ((sizeof(x) * 8) - __builtin_clz((x) - 1)))
+
+/* Followed by one of EgcInputReportElement* */
+typedef enum ATTRIBUTE_PACKED {
+    EGC_INPUT_REPORT_TYPE_END = 0,
+    EGC_INPUT_REPORT_TYPE_SKIP,
+    EGC_INPUT_REPORT_TYPE_AXIS_FIRST,
+    EGC_INPUT_REPORT_TYPE_AXIS_S8 = EGC_INPUT_REPORT_TYPE_AXIS_FIRST,
+    EGC_INPUT_REPORT_TYPE_AXIS_U8,
+    EGC_INPUT_REPORT_TYPE_AXIS_U8_MONO, /* for triggers */
+    EGC_INPUT_REPORT_TYPE_AXIS_S16LE,
+    EGC_INPUT_REPORT_TYPE_AXIS_U16,
+    EGC_INPUT_REPORT_TYPE_AXIS_INVERTED = LPO2(EGC_INPUT_REPORT_TYPE_AXIS_U16),
+    EGC_INPUT_REPORT_TYPE_AXIS_LAST = (EGC_INPUT_REPORT_TYPE_AXIS_INVERTED * 2 - 1),
+    EGC_INPUT_REPORT_TYPE_BUTTON4,
+    EGC_INPUT_REPORT_TYPE_DPAD,
+} EgcInputReportElementType;
+
+static_assert(EGC_INPUT_REPORT_TYPE_AXIS_FIRST == 0x02);
+static_assert(EGC_INPUT_REPORT_TYPE_AXIS_U16 < EGC_INPUT_REPORT_TYPE_AXIS_INVERTED);
+
+u16 egc_device_driver_parse_report(const void *raw_report, const u8 *elements,
+                                   struct egc_input_state_t *state);
+
 extern const egc_device_driver_t ds3_usb_device_driver;
 extern const egc_device_driver_t ds4_usb_device_driver;
 extern const egc_device_driver_t dr_usb_device_driver;

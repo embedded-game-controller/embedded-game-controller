@@ -203,6 +203,118 @@ u32 egc_device_driver_extract_bits(const u8 *data, int offset, int n)
     return value & mask;
 }
 
+static inline u32 parse_dpad(u8 dpad)
+{
+    switch (dpad) {
+    case 0:
+        return 1 << EGC_GAMEPAD_BUTTON_DPAD_UP;
+    case 1:
+        return (1 << EGC_GAMEPAD_BUTTON_DPAD_UP) | (1 << EGC_GAMEPAD_BUTTON_DPAD_RIGHT);
+    case 2:
+        return 1 << EGC_GAMEPAD_BUTTON_DPAD_RIGHT;
+    case 3:
+        return (1 << EGC_GAMEPAD_BUTTON_DPAD_RIGHT) | (1 << EGC_GAMEPAD_BUTTON_DPAD_DOWN);
+    case 4:
+        return 1 << EGC_GAMEPAD_BUTTON_DPAD_DOWN;
+    case 5:
+        return (1 << EGC_GAMEPAD_BUTTON_DPAD_DOWN) | (1 << EGC_GAMEPAD_BUTTON_DPAD_LEFT);
+    case 6:
+        return 1 << EGC_GAMEPAD_BUTTON_DPAD_LEFT;
+    case 7:
+        return (1 << EGC_GAMEPAD_BUTTON_DPAD_LEFT) | (1 << EGC_GAMEPAD_BUTTON_DPAD_UP);
+    default:
+        return 0;
+    }
+}
+
+u16 egc_device_driver_parse_report(const void *raw_report, const u8 *elements,
+                                   struct egc_input_state_t *state)
+{
+    const u8 *data = raw_report;
+    int offset = 0;
+    u8 type;
+    do {
+        type = *(elements++);
+        if (type == EGC_INPUT_REPORT_TYPE_SKIP) {
+            int skip_bits = *(elements++);
+            offset += skip_bits;
+        } else if (type == EGC_INPUT_REPORT_TYPE_BUTTON4) {
+            /* This type is always aligned to a nibble, so we never
+             * increment the data pointer within this loop */
+            for (int i = 0; i < 4; i++) {
+                egc_gamepad_button_e code = *(elements++);
+                if (code == EGC_GAMEPAD_BUTTON_INVALID)
+                    continue;
+
+                u8 b = data[offset / 8];
+                int bit_offset = offset % 8;
+                bool down = (b & (1 << (7 - (bit_offset + i)))) != 0;
+                if (code == EGC_GAMEPAD_BUTTON_LEFT_TRIGGER) {
+                    state->gamepad.axes[EGC_GAMEPAD_AXIS_LEFT_TRIGGER] = down * INT16_MAX;
+                } else if (code == EGC_GAMEPAD_BUTTON_RIGHT_TRIGGER) {
+                    state->gamepad.axes[EGC_GAMEPAD_AXIS_RIGHT_TRIGGER] = down * INT16_MAX;
+                } else if (down) {
+                    state->gamepad.buttons |= (1 << code);
+                }
+            }
+            offset += 4;
+        } else if (type == EGC_INPUT_REPORT_TYPE_DPAD) {
+            u8 b = data[offset / 8];
+            if (offset % 8 == 0) {
+                b >>= 4;
+            } else {
+                b &= 0xf;
+            }
+            state->gamepad.buttons |= parse_dpad(b);
+            offset += 4;
+        } else if (type >= EGC_INPUT_REPORT_TYPE_AXIS_FIRST &&
+                   type <= EGC_INPUT_REPORT_TYPE_AXIS_LAST) {
+#define EGC_TRIGGER_VALUE 2048
+            s16 value = 0;
+            EgcInputReportElementType axis_type = type & ~EGC_INPUT_REPORT_TYPE_AXIS_INVERTED;
+            if (axis_type == EGC_INPUT_REPORT_TYPE_AXIS_S8) {
+                u8 b = data[offset / 8];
+                value = (b << 8) | (b << 1) | ((b >> 6) & 0x1);
+                offset += 8;
+            } else if (axis_type == EGC_INPUT_REPORT_TYPE_AXIS_U8) {
+                value = egc_u8_to_s16(data[offset / 8]);
+                offset += 8;
+            } else if (axis_type == EGC_INPUT_REPORT_TYPE_AXIS_U8_MONO) {
+                u8 b = data[offset / 8];
+                value = (b << 7) | (b >> 1);
+                offset += 8;
+            } else if (axis_type == EGC_INPUT_REPORT_TYPE_AXIS_S16LE) {
+                value = (s16)((data[offset / 8 + 1] << 8) | data[offset / 8]);
+                offset += 16;
+            } else {
+                // TODO
+            }
+            egc_gamepad_axis_e axis = *(elements++);
+            if (type & EGC_INPUT_REPORT_TYPE_AXIS_INVERTED) {
+                value = -value - 1;
+            }
+
+            if (axis == EGC_GAMEPAD_AXIS_DPADX) {
+                if (value < -EGC_TRIGGER_VALUE) {
+                    state->gamepad.buttons |= 1 << EGC_GAMEPAD_BUTTON_DPAD_LEFT;
+                } else if (value > EGC_TRIGGER_VALUE) {
+                    state->gamepad.buttons |= 1 << EGC_GAMEPAD_BUTTON_DPAD_RIGHT;
+                }
+            } else if (axis == EGC_GAMEPAD_AXIS_DPADY) {
+                if (value < -EGC_TRIGGER_VALUE) {
+                    state->gamepad.buttons |= 1 << EGC_GAMEPAD_BUTTON_DPAD_UP;
+                } else if (value > EGC_TRIGGER_VALUE) {
+                    state->gamepad.buttons |= 1 << EGC_GAMEPAD_BUTTON_DPAD_DOWN;
+                }
+            } else {
+                state->gamepad.axes[axis] = value;
+            }
+#undef EGC_TRIGGER_VALUE
+        }
+    } while (type != EGC_INPUT_REPORT_TYPE_END);
+    return (offset + 7) / 8;
+}
+
 int egc_input_device_resume(egc_input_device_t *device)
 {
     egc_device_priv_t *priv = get_priv(device);

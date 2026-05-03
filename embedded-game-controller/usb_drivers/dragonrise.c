@@ -1,74 +1,13 @@
 #include "driver_api.h"
+#include "generic_mappings.h"
 #include "utils.h"
-
-struct dr_input_report {
-    u8 left_x;
-    u8 left_y;
-    u8 left_x_ignore;
-    u8 right_x;
-    u8 right_y;
-
-    u8 bitfield1;
-    u8 bitfield2;
-
-    u8 unknown; /* Hardcoded 0x40? */
-} ATTRIBUTE_PACKED;
-
-enum dr_buttons_e {
-    /* bitfield1: */
-    DR_BUTTON_UP,
-    DR_BUTTON_DOWN,
-    DR_BUTTON_LEFT,
-    DR_BUTTON_RIGHT,
-    DR_BUTTON_1,
-    DR_BUTTON_2,
-    DR_BUTTON_3,
-    DR_BUTTON_4,
-    /* bitfield2: */
-    DR_BUTTON_L1,
-    DR_BUTTON_R1,
-    DR_BUTTON_L2,
-    DR_BUTTON_R2,
-    DR_BUTTON_SELECT,
-    DR_BUTTON_START,
-    DR_BUTTON_JOY1,
-    DR_BUTTON_JOY2,
-    DR_BUTTON_COUNT
-};
-
-enum dr_analog_axis_e {
-    DR_ANALOG_AXIS_LEFT_X,
-    DR_ANALOG_AXIS_LEFT_Y,
-    DR_ANALOG_AXIS_RIGHT_X,
-    DR_ANALOG_AXIS_RIGHT_Y,
-    DR_ANALOG_AXIS_COUNT
-};
 
 struct dr_private_data_t {
     bool process_reports;
+    const u8 *report_elements;
 };
 static_assert(sizeof(struct dr_private_data_t) <= EGC_INPUT_DEVICE_DRIVER_DATA_SIZE);
 #define PRIV(input_device) ((struct dr_private_data_t *)get_priv(input_device)->private_data)
-
-/* Map each button of the controller to an egc_gamepad_button_e */
-static const egc_gamepad_button_e s_button_map[DR_BUTTON_COUNT] = {
-    [DR_BUTTON_UP] = EGC_GAMEPAD_BUTTON_DPAD_UP,
-    [DR_BUTTON_DOWN] = EGC_GAMEPAD_BUTTON_DPAD_DOWN,
-    [DR_BUTTON_LEFT] = EGC_GAMEPAD_BUTTON_DPAD_LEFT,
-    [DR_BUTTON_RIGHT] = EGC_GAMEPAD_BUTTON_DPAD_RIGHT,
-    [DR_BUTTON_1] = EGC_GAMEPAD_BUTTON_NORTH,
-    [DR_BUTTON_2] = EGC_GAMEPAD_BUTTON_EAST,
-    [DR_BUTTON_3] = EGC_GAMEPAD_BUTTON_SOUTH,
-    [DR_BUTTON_4] = EGC_GAMEPAD_BUTTON_WEST,
-    [DR_BUTTON_L1] = EGC_GAMEPAD_BUTTON_LEFT_SHOULDER,
-    [DR_BUTTON_R1] = EGC_GAMEPAD_BUTTON_RIGHT_SHOULDER,
-    [DR_BUTTON_L2] = EGC_GAMEPAD_BUTTON_INVALID,
-    [DR_BUTTON_R2] = EGC_GAMEPAD_BUTTON_INVALID,
-    [DR_BUTTON_SELECT] = EGC_GAMEPAD_BUTTON_BACK,
-    [DR_BUTTON_START] = EGC_GAMEPAD_BUTTON_START,
-    [DR_BUTTON_JOY1] = EGC_GAMEPAD_BUTTON_LEFT_STICK,
-    [DR_BUTTON_JOY2] = EGC_GAMEPAD_BUTTON_RIGHT_STICK,
-};
 
 static const egc_device_description_t s_device_description = {
     .vendor_id = 0x0079,
@@ -104,84 +43,30 @@ static const egc_device_description_t s_device_description = {
     .has_rumble = false,
 };
 
-static inline u8 dpad_to_buttons(u8 dpad)
-{
-    switch (dpad) {
-    case 0:
-        return 1 << DR_BUTTON_UP;
-    case 1:
-        return (1 << DR_BUTTON_UP) | (1 << DR_BUTTON_RIGHT);
-    case 2:
-        return 1 << DR_BUTTON_RIGHT;
-    case 3:
-        return (1 << DR_BUTTON_RIGHT) | (1 << DR_BUTTON_DOWN);
-    case 4:
-        return 1 << DR_BUTTON_DOWN;
-    case 5:
-        return (1 << DR_BUTTON_DOWN) | (1 << DR_BUTTON_LEFT);
-    case 6:
-        return 1 << DR_BUTTON_LEFT;
-    case 7:
-        return (1 << DR_BUTTON_LEFT) | (1 << DR_BUTTON_UP);
-    default:
-        return 0;
-    }
-}
-
-static inline u32 dr_get_buttons(const struct dr_input_report *report)
-{
-    u8 bitfield1 = report->bitfield1;
-    bitfield1 = (bitfield1 & 0xf0) | dpad_to_buttons(bitfield1 & 0xf);
-    return bitfield1 | (report->bitfield2 << 8);
-}
-
-static inline void dr_get_analog_axis(const struct dr_input_report *report,
-                                      u8 analog_axis[static DR_ANALOG_AXIS_COUNT])
-{
-    analog_axis[DR_ANALOG_AXIS_LEFT_X] = report->left_x;
-    analog_axis[DR_ANALOG_AXIS_LEFT_Y] = 255 - report->left_y;
-    analog_axis[DR_ANALOG_AXIS_RIGHT_X] = report->right_x;
-    analog_axis[DR_ANALOG_AXIS_RIGHT_Y] = 255 - report->right_y;
-}
-
 static void dr_driver_ops_intr_event(egc_input_device_t *device, const void *data, u16 length)
 {
     struct dr_private_data_t *priv = PRIV(device);
-    const struct dr_input_report *report = data;
-    struct egc_input_state_t state;
+    struct egc_input_state_t state = {
+        0,
+    };
 
     if (priv->process_reports) {
-        u32 buttons = dr_get_buttons(report);
-        state.gamepad.buttons =
-            egc_device_driver_map_buttons(buttons, DR_BUTTON_COUNT, s_button_map);
-
-        u8 axes[DR_ANALOG_AXIS_COUNT];
-        dr_get_analog_axis(report, axes);
-        state.gamepad.axes[EGC_GAMEPAD_AXIS_LEFTX] = egc_u8_to_s16(axes[DR_ANALOG_AXIS_LEFT_X]);
-        state.gamepad.axes[EGC_GAMEPAD_AXIS_LEFTY] = egc_u8_to_s16(axes[DR_ANALOG_AXIS_LEFT_Y]);
-        state.gamepad.axes[EGC_GAMEPAD_AXIS_RIGHTX] = egc_u8_to_s16(axes[DR_ANALOG_AXIS_RIGHT_X]);
-        state.gamepad.axes[EGC_GAMEPAD_AXIS_RIGHTY] = egc_u8_to_s16(axes[DR_ANALOG_AXIS_RIGHT_Y]);
-        state.gamepad.axes[EGC_GAMEPAD_AXIS_LEFT_TRIGGER] =
-            ((buttons >> DR_BUTTON_L2) & 1) * INT16_MAX;
-        state.gamepad.axes[EGC_GAMEPAD_AXIS_RIGHT_TRIGGER] =
-            ((buttons >> DR_BUTTON_R2) & 1) * INT16_MAX;
-
+        egc_device_driver_parse_report(data, priv->report_elements, &state);
         egc_device_driver_report_input(device, &state);
     }
 }
 
 static bool dr_driver_ops_probe(u16 vid, u16 pid)
 {
-    static const egc_device_id_t compatible[] = {
-        { 0x0079, 0x0006 }, /* DragonRise Inc. | PC TWIN SHOCK Gamepad */
-    };
-
-    return egc_device_driver_is_compatible(vid, pid, compatible, ARRAY_SIZE(compatible));
+    const u8 *elements = egc_device_driver_input_parser_for(vid, pid);
+    return elements != NULL;
 }
 
 static int dr_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
 {
     struct dr_private_data_t *priv = PRIV(device);
+
+    priv->report_elements = egc_device_driver_input_parser_for(vid, pid);
 
     device->desc = &s_device_description;
     egc_device_driver_set_endpoints(device, EGC_USB_ENDPOINT_IN | 1, 5, 0 /* not used */, 5);
