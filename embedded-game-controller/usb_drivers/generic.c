@@ -67,6 +67,15 @@ static int dr_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
     struct dr_private_data_t *priv = PRIV(device);
 
     priv->report_elements = egc_device_driver_input_parser_for(vid, pid);
+    /* Compute the report size by parsing a fake report */
+    {
+        u8 null_report[128] = {
+            0,
+        };
+        struct egc_input_state_t state;
+        u16 size = egc_device_driver_parse_report(null_report, priv->report_elements, &state);
+        egc_device_driver_set_read_size(device, size);
+    }
 
     device->desc = &s_device_description;
     egc_device_driver_set_endpoints(device, EGC_USB_ENDPOINT_IN | 1, 5, 0 /* not used */, 5);

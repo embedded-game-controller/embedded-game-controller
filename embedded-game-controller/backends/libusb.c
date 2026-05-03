@@ -179,7 +179,7 @@ static const egc_usb_transfer_t *lu_intr_transfer_async(egc_input_device_t *inpu
 
     if (data)
         memcpy(buffer, data, length);
-    if (endpoint & LIBUSB_ENDPOINT_IN) {
+    if (endpoint & LIBUSB_ENDPOINT_IN && length == 0) {
         length = sizeof(t->buffer);
     }
 

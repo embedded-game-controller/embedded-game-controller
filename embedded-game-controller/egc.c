@@ -53,7 +53,7 @@ static void read_interrupts(egc_input_device_t *device)
         return;
 
     const egc_usb_transfer_t *transfer = egc_device_driver_issue_intr_transfer_async(
-        device, priv->endpoint_in, NULL, 0, interrupt_read_cb);
+        device, priv->endpoint_in, NULL, priv->endpoint_in_size, interrupt_read_cb);
     if (!transfer) {
         EGC_DEBUG("Could not get a in transfer!");
     }
@@ -73,6 +73,12 @@ void egc_device_driver_set_endpoints(egc_input_device_t *device, u8 endpoint_in,
     priv->endpoint_out = endpoint_out;
     priv->interval_in = interval_in;
     priv->interval_out = interval_out;
+}
+
+void egc_device_driver_set_read_size(egc_input_device_t *device, u8 size)
+{
+    egc_device_priv_t *priv = get_priv(device);
+    priv->endpoint_in_size = size;
 }
 
 int egc_device_driver_send_output_report(egc_input_device_t *device, void *data, u16 length)
