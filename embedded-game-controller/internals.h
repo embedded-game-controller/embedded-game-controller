@@ -17,6 +17,7 @@ typedef struct {
     /* How much we should wait until the next transfer (in ms) */
     u8 wait_time_in;
     u8 wait_time_out;
+    u8 endpoint_in_size; /* Size to read, in bytes */
 
     const egc_device_driver_t *driver ATTRIBUTE_ALIGN(4);
     u8 private_data[EGC_INPUT_DEVICE_DRIVER_DATA_SIZE] ATTRIBUTE_ALIGN(4);

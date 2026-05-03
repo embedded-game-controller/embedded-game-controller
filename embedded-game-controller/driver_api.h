@@ -38,6 +38,7 @@ egc_device_description_t *egc_device_driver_alloc_desc(egc_input_device_t *devic
 /* For USB connections */
 void egc_device_driver_set_endpoints(egc_input_device_t *device, u8 endpoint_in, u8 interval_in,
                                      u8 endpoint_out, u8 interval_out);
+void egc_device_driver_set_read_size(egc_input_device_t *device, u8 size);
 int egc_device_driver_send_output_report(egc_input_device_t *device, void *data, u16 length);
 const egc_usb_transfer_t *egc_device_driver_issue_ctrl_transfer_async(egc_input_device_t *device,
                                                                       u8 requesttype, u8 request,
