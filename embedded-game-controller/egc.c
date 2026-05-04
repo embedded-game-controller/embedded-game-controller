@@ -466,6 +466,10 @@ int egc_initialize(egc_input_device_cb added_cb, egc_input_device_cb removed_cb,
 
 #if WITH_BLUETOOTH
     rc = _egc_bt_initialize();
+    if (rc < 0) {
+        EGC_WARN("Bluetooth initialization failed (%d), continuing without BT support", rc);
+        rc = 0;
+    }
 #endif
 
     return rc;
