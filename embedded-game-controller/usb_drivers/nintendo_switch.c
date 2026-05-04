@@ -63,9 +63,12 @@
 #define JC_CAL_USR_MAGIC 0xA1B2
 
 /* SPI FLASH addresses */
-#define JC_SPI_ADDR_IMU_CAL_USR_MAGIC 0x8026
-#define JC_SPI_ADDR_IMU_CAL_USR       0x8028
-#define JC_SPI_ADDR_IMU_CAL_FCT       0x6020
+#define JC_SPI_ADDR_IMU_CAL_USR_MAGIC         0x8026
+#define JC_SPI_ADDR_IMU_CAL_USR               0x8028
+#define JC_SPI_ADDR_IMU_CAL_FCT               0x6020
+#define JC_SPI_ADDR_STICK_CAL_LEFT_USR_MAGIC  0x8010
+#define JC_SPI_ADDR_STICK_CAL_RIGHT_USR_MAGIC 0x801b
+#define JC_STICK_CAL_SIZE                     9
 
 #define JC_DFLT_ACCEL_SCALE 0x4000
 
@@ -94,6 +97,12 @@ typedef struct {
 } ATTRIBUTE_PACKED ns_spi_read_request_t;
 
 typedef struct {
+    u16 max;
+    u16 min;
+    u16 center;
+} ATTRIBUTE_PACKED ns_stick_cal_t;
+
+typedef struct {
     s16 accel_offset[3];
     s16 accel_scale[3];
     s16 gyro_offset[3];
@@ -113,6 +122,10 @@ typedef struct {
                     /* SPI addr 0x8028 */
                     ns_joycon_imu_cal_t cal;
                 } ATTRIBUTE_PACKED imu_cal_user;
+                struct ns_spi_stick_cal_user_t {
+                    u16 magic;
+                    u8 cal[JC_STICK_CAL_SIZE];
+                } ATTRIBUTE_PACKED stick_cal_user;
 
                 ns_joycon_imu_cal_t imu_cal_factory;
             };
@@ -291,6 +304,9 @@ static const ns_coded_command_t s_initialization_commands[] = {
      * calibration we retrieved before */
     { NS_CODED_CAL,
      { .cal = { JC_SPI_ADDR_IMU_CAL_USR_MAGIC, sizeof(struct ns_spi_imu_cal_user_t) } } },
+    /* Stick factory calibration data */
+    { NS_CODED_CAL, { .cal = { JC_SPI_ADDR_STICK_CAL_LEFT_USR_MAGIC, 2 + JC_STICK_CAL_SIZE } } },
+    { NS_CODED_CAL, { .cal = { JC_SPI_ADDR_STICK_CAL_RIGHT_USR_MAGIC, 2 + JC_STICK_CAL_SIZE } } },
     { NS_CODED_SUBCOMMAND, { .subcmd = { JC_SUBCMD_SET_REPORT_MODE, JC_INPUT_IMU_DATA, 1 } } },
     { NS_CODED_SUBCOMMAND, { .subcmd = { JC_SUBCMD_ENABLE_IMU, 1, 1 } } },
     { NS_CODED_SUBCOMMAND, { .subcmd = { JC_SUBCMD_ENABLE_VIBRATION, 1, 1 } } },
@@ -303,6 +319,8 @@ struct ns_private_data_t {
     ns_usb_cmd_cb_t usb_cmd_cb;
     s16 accel_divisor[3];
     s16 gyro_divisor[3];
+    ns_stick_cal_t stick_cal_left[2];  /* index 0 is x */
+    ns_stick_cal_t stick_cal_right[2]; /* index 0 is x */
     s8 step_attempts;
     s8 init_state;
     u8 next_packet_num;
@@ -412,11 +430,25 @@ static inline u32 ns_get_buttons(const u8 *buttons)
     return buttons[0] | (buttons[1] << 8) | (buttons[2] << 16);
 }
 
-static void ns_get_analog_axis(const u8 *bytes, s16 *axes)
+static s16 ns_get_calibrated_axis(u16 raw, const ns_stick_cal_t *cal)
 {
-    /* TODO: adjust the values according with the calibration data */
-    axes[0] = (s16)((bytes[1] << 12) | (bytes[0] << 4) | (bytes[0] & 0x0f)) + SHRT_MIN;
-    axes[1] = (s16)((bytes[2] << 8) | (bytes[1] >> 4) | (bytes[1] & 0xf0)) + SHRT_MIN;
+    int val;
+    if (raw > cal->center) {
+        val = (raw - cal->center) * INT16_MAX / (cal->max - cal->center);
+        if (val > INT16_MAX)
+            val = INT16_MAX;
+    } else {
+        val = (cal->center - raw) * INT16_MIN / (cal->center - cal->min);
+        if (val < INT16_MIN)
+            val = INT16_MIN;
+    }
+    return val;
+}
+
+static void ns_get_analog_axis(const u8 *bytes, s16 *axes, const ns_stick_cal_t *cal)
+{
+    axes[0] = ns_get_calibrated_axis(((bytes[1] & 0xf) << 8) | bytes[0], &cal[0]);
+    axes[1] = ns_get_calibrated_axis((bytes[2] << 4) | (bytes[1] >> 4), &cal[1]);
 }
 
 static inline void ns_get_accel(const struct ns_private_data_t *priv,
@@ -456,8 +488,14 @@ static bool parse_input_report(egc_input_device_t *device, const ns_input_report
     if (device->desc->product_id == NS_PID_PRO) {
         state->gamepad.buttons =
             egc_device_driver_map_buttons(buttons, NS_BUTTON_COUNT, s_button_map_pro);
-        ns_get_analog_axis(report->left_stick, &state->gamepad.axes[NS_ANALOG_AXIS_LEFT_X]);
-        ns_get_analog_axis(report->right_stick, &state->gamepad.axes[NS_ANALOG_AXIS_RIGHT_X]);
+        ns_get_analog_axis(report->left_stick, &state->gamepad.axes[NS_ANALOG_AXIS_LEFT_X],
+                           priv->stick_cal_left);
+        state->gamepad.axes[NS_ANALOG_AXIS_LEFT_Y] =
+            -1 - state->gamepad.axes[NS_ANALOG_AXIS_LEFT_Y];
+        ns_get_analog_axis(report->right_stick, &state->gamepad.axes[NS_ANALOG_AXIS_RIGHT_X],
+                           priv->stick_cal_right);
+        state->gamepad.axes[NS_ANALOG_AXIS_RIGHT_Y] =
+            -1 - state->gamepad.axes[NS_ANALOG_AXIS_RIGHT_Y];
         state->gamepad.axes[EGC_GAMEPAD_AXIS_LEFT_TRIGGER] =
             ((buttons >> NS_BUTTON_ZL) & 1) * INT16_MAX;
         state->gamepad.axes[EGC_GAMEPAD_AXIS_RIGHT_TRIGGER] =
@@ -465,11 +503,13 @@ static bool parse_input_report(egc_input_device_t *device, const ns_input_report
     } else if (device->desc->product_id == NS_PID_LJC) {
         state->gamepad.buttons =
             egc_device_driver_map_buttons(buttons, NS_BUTTON_COUNT, s_button_map_ljc);
-        ns_get_analog_axis(report->left_stick, &state->gamepad.axes[NS_ANALOG_AXIS_LEFT_X]);
+        ns_get_analog_axis(report->left_stick, &state->gamepad.axes[NS_ANALOG_AXIS_LEFT_X],
+                           priv->stick_cal_left);
         /* Adjust for rotation */
         s16 original_x = state->gamepad.axes[NS_ANALOG_AXIS_LEFT_X];
-        state->gamepad.axes[NS_ANALOG_AXIS_LEFT_X] = -state->gamepad.axes[NS_ANALOG_AXIS_LEFT_Y];
-        state->gamepad.axes[NS_ANALOG_AXIS_LEFT_Y] = original_x;
+        state->gamepad.axes[NS_ANALOG_AXIS_LEFT_X] =
+            -1 - state->gamepad.axes[NS_ANALOG_AXIS_LEFT_Y];
+        state->gamepad.axes[NS_ANALOG_AXIS_LEFT_Y] = -1 - original_x;
 
         float tmp = accel->x;
         accel->x = accel->z;
@@ -477,11 +517,12 @@ static bool parse_input_report(egc_input_device_t *device, const ns_input_report
     } else if (device->desc->product_id == NS_PID_RJC) {
         state->gamepad.buttons =
             egc_device_driver_map_buttons(buttons, NS_BUTTON_COUNT, s_button_map_rjc);
-        ns_get_analog_axis(report->right_stick, &state->gamepad.axes[NS_ANALOG_AXIS_LEFT_X]);
+        ns_get_analog_axis(report->right_stick, &state->gamepad.axes[NS_ANALOG_AXIS_LEFT_X],
+                           priv->stick_cal_right);
         /* Adjust for rotation */
         s16 original_x = state->gamepad.axes[NS_ANALOG_AXIS_LEFT_X];
         state->gamepad.axes[NS_ANALOG_AXIS_LEFT_X] = state->gamepad.axes[NS_ANALOG_AXIS_LEFT_Y];
-        state->gamepad.axes[NS_ANALOG_AXIS_LEFT_Y] = -original_x;
+        state->gamepad.axes[NS_ANALOG_AXIS_LEFT_Y] = original_x;
         float tmp = accel->x;
         accel->x = -accel->z;
         accel->z = -tmp;
@@ -603,6 +644,46 @@ static void ns_prepare_imu_calibration(struct ns_private_data_t *priv,
             priv->gyro_divisor[i] = 1;
     }
 }
+static void ns_stick_calibrate_default(ns_stick_cal_t *stick)
+{
+    stick[0].min = stick[1].min = 500;
+    stick[0].center = stick[1].center = 2000;
+    stick[0].max = stick[1].max = 3500;
+}
+
+static void ns_prepare_stick_calibration(ns_stick_cal_t *stick, const u8 *cal, bool is_left)
+{
+    u16 x_max_above, x_min_below;
+    u16 y_max_above, y_min_below;
+    if (is_left) {
+        x_max_above = egc_device_driver_extract_bits(cal + 0, 0, 12);
+        y_max_above = egc_device_driver_extract_bits(cal + 1, 4, 12);
+        stick[0].center = egc_device_driver_extract_bits(cal + 3, 0, 12);
+        stick[1].center = egc_device_driver_extract_bits(cal + 4, 4, 12);
+        x_min_below = egc_device_driver_extract_bits(cal + 6, 0, 12);
+        y_min_below = egc_device_driver_extract_bits(cal + 7, 4, 12);
+    } else {
+        stick[0].center = egc_device_driver_extract_bits(cal + 0, 0, 12);
+        stick[1].center = egc_device_driver_extract_bits(cal + 1, 4, 12);
+        x_min_below = egc_device_driver_extract_bits(cal + 3, 0, 12);
+        y_min_below = egc_device_driver_extract_bits(cal + 4, 4, 12);
+        x_max_above = egc_device_driver_extract_bits(cal + 6, 0, 12);
+        y_max_above = egc_device_driver_extract_bits(cal + 7, 4, 12);
+    }
+
+    stick[0].max = stick[0].center + x_max_above;
+    stick[0].min = stick[0].center - x_min_below;
+    stick[1].max = stick[1].center + y_max_above;
+    stick[1].min = stick[1].center - y_min_below;
+
+    EGC_DEBUG("X %d / %d / %d, Y %d %d %d", stick[0].min, stick[0].center, stick[0].max,
+              stick[1].min, stick[1].center, stick[1].max);
+    /* check if calibration values are plausible */
+    if (stick[0].min >= stick[0].center || stick[0].center >= stick[0].max ||
+        stick[1].min >= stick[1].center || stick[1].center >= stick[1].max) {
+        ns_stick_calibrate_default(stick);
+    }
+}
 
 static void ns_init_step_reply(egc_input_device_t *device, const void *data, u16 length)
 {
@@ -631,12 +712,26 @@ static void ns_init_step_reply(egc_input_device_t *device, const void *data, u16
                 ns_copy_u16_from_le((u16 *)&imu_cal, (u16 *)factory_cal,
                                     sizeof(ns_joycon_imu_cal_t) / sizeof(u16));
                 ns_prepare_imu_calibration(priv, &imu_cal);
+            } else if (requested_address == htole16(JC_SPI_ADDR_STICK_CAL_LEFT_USR_MAGIC) ||
+                       requested_address == htole16(JC_SPI_ADDR_STICK_CAL_RIGHT_USR_MAGIC)) {
+                const struct ns_spi_stick_cal_user_t *user_cal =
+                    &report->subcmd_reply.spi_reply.stick_cal_user;
+
+                if (user_cal->magic != htole16(JC_CAL_USR_MAGIC))
+                    goto done;
+
+                ns_stick_cal_t *stick =
+                    requested_address == htole16(JC_SPI_ADDR_STICK_CAL_LEFT_USR_MAGIC)
+                        ? priv->stick_cal_left
+                        : priv->stick_cal_right;
+                ns_prepare_stick_calibration(stick, user_cal->cal, stick == priv->stick_cal_left);
             } else {
                 EGC_DEBUG("Got SPI address: %04x",
                           (int)le16toh(report->subcmd_reply.spi_reply.req.addr));
             }
         }
     }
+done:
     ns_init_step_next(device);
 }
 
@@ -807,6 +902,8 @@ static int ns_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
         imu_cal.gyro_scale[i] = 13371;
     }
     ns_prepare_imu_calibration(priv, &imu_cal);
+    ns_stick_calibrate_default(priv->stick_cal_left);
+    ns_stick_calibrate_default(priv->stick_cal_right);
 
     ns_init_step_next(device);
     return 0;

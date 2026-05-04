@@ -63,6 +63,8 @@ int egc_device_driver_report_input(egc_input_device_t *device, const egc_input_s
  * `map`. */
 u32 egc_device_driver_map_buttons(u32 buttons, int count, const egc_gamepad_button_e *map);
 
+u32 egc_device_driver_extract_bits(const u8 *data, int offset, int n);
+
 /* Utility functions for remapping values */
 static inline s16 egc_u8_to_s16(u8 value)
 {

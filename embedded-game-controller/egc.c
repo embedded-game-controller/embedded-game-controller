@@ -182,6 +182,27 @@ u32 egc_device_driver_map_buttons(u32 buttons, int count, const egc_gamepad_butt
     return ret;
 }
 
+u32 egc_device_driver_extract_bits(const u8 *data, int offset, int n)
+{
+    int i = 0;
+    int bit_nr = 0;
+    int bit_shift = offset;
+    int bits_to_copy = 8 - bit_shift;
+    u32 value = 0;
+    u32 mask = (1 << n) - 1;
+
+    while (n > 0) {
+        value |= ((u32)data[i] >> bit_shift) << bit_nr;
+        n -= bits_to_copy;
+        bit_nr += bits_to_copy;
+        bits_to_copy = 8;
+        bit_shift = 0;
+        i++;
+    }
+
+    return value & mask;
+}
+
 int egc_input_device_resume(egc_input_device_t *device)
 {
     egc_device_priv_t *priv = get_priv(device);
