@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.13)
 
+set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+
 set(EGC_MAJOR 0)
 set(EGC_MINOR 1)
 set(EGC_PATCH 0)
@@ -52,7 +54,6 @@ add_compile_options(
 )
 
 if(WITH_BLUETOOTH)
-    set(BUILD_EXAMPLE OFF CACHE BOOL "Build example program" FORCE)
     add_subdirectory(bt-embedded)
     link_libraries(bt-embedded)
     include_directories(${CMAKE_SOURCE_DIR}/bt-embedded)
