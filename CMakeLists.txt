@@ -20,6 +20,10 @@ project(
 option(WITH_BLUETOOTH "Support bluetooth controllers" ON)
 option(BUILD_EXAMPLE "Build example program" OFF)
 
+option(WITH_DRIVER_DS3 "Enable DualShock 3 driver" ON)
+option(WITH_DRIVER_DS4 "Enable DualShock 4 driver" ON)
+option(WITH_DRIVER_NINTENDO_SWITCH "Enable Nintendo Switch driver" ON)
+option(WITH_DRIVER_GENERIC "Enable generic driver" ON)
 option(WITH_GENERIC_MAPPINGS "Enable hardcoded generic mappings" ON)
 
 include(GNUInstallDirs)

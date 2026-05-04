@@ -49,6 +49,18 @@ target_link_libraries(embedded-game-controller PRIVATE
     ${EXTRA_LIBS}
 )
 
+if(WITH_DRIVER_DS3)
+    add_compile_definitions(WITH_DRIVER_DS3)
+endif()
+if(WITH_DRIVER_DS4)
+    add_compile_definitions(WITH_DRIVER_DS4)
+endif()
+if(WITH_DRIVER_NINTENDO_SWITCH)
+    add_compile_definitions(WITH_DRIVER_NINTENDO_SWITCH)
+endif()
+if(WITH_DRIVER_GENERIC)
+    add_compile_definitions(WITH_DRIVER_GENERIC)
+endif()
 if(WITH_GENERIC_MAPPINGS)
     add_compile_definitions(WITH_GENERIC_MAPPINGS)
 endif()
