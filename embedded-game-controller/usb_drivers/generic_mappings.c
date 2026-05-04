@@ -137,10 +137,12 @@ static const Mapping s_mappings[] = {
     { 0x2dc8, 0x3106,     s_elements_8bitdo },
 };
 
+#ifdef WITH_GENERIC_MAPPINGS
 const u8 *egc_device_driver_input_parser_for(u16 vid, u16 pid)
 {
     return egc_device_driver_hardcoded_mapping(vid, pid);
 }
+#endif
 
 const u8 *egc_device_driver_hardcoded_mapping(u16 vid, u16 pid)
 {

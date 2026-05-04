@@ -20,6 +20,8 @@ project(
 option(WITH_BLUETOOTH "Support bluetooth controllers" ON)
 option(BUILD_EXAMPLE "Build example program" OFF)
 
+option(WITH_GENERIC_MAPPINGS "Enable hardcoded generic mappings" ON)
+
 include(GNUInstallDirs)
 
 if(NOT CMAKE_BUILD_TYPE)
