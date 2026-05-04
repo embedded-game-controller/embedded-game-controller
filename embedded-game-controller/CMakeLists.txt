@@ -49,6 +49,10 @@ target_link_libraries(embedded-game-controller PRIVATE
     ${EXTRA_LIBS}
 )
 
+if(WITH_GENERIC_MAPPINGS)
+    add_compile_definitions(WITH_GENERIC_MAPPINGS)
+endif()
+
 set(PUBLIC_HEADERS
     egc.h
     egc_types.h
