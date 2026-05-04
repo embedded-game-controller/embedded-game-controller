@@ -11,10 +11,18 @@
 #include "utils.h"
 
 static const egc_device_driver_t *usb_device_drivers[] = {
+#ifdef WITH_DRIVER_DS3
     &ds3_usb_device_driver,
+#endif
+#ifdef WITH_DRIVER_DS4
     &ds4_usb_device_driver,
+#endif
+#ifdef WITH_DRIVER_GENERIC
     &dr_usb_device_driver,
+#endif
+#ifdef WITH_DRIVER_NINTENDO_SWITCH
     &ns_usb_device_driver,
+#endif
 };
 
 static egc_input_device_cb s_device_added_cb = NULL;
