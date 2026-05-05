@@ -22,10 +22,6 @@ else()
     message(FATAL_ERROR "No available platform backend")
 endif()
 
-if(WITH_BLUETOOTH)
-    set(PC_REQUIRES "${PC_REQUIRES} bt-embedded")
-endif()
-
 add_library(embedded-game-controller STATIC
     ${PLATFORM_SOURCES}
     bluetooth.c
@@ -48,6 +44,13 @@ target_link_options(embedded-game-controller PRIVATE
 target_link_libraries(embedded-game-controller PRIVATE
     ${EXTRA_LIBS}
 )
+
+if(WITH_BLUETOOTH)
+    pkg_check_modules(BTEMBEDDED REQUIRED IMPORTED_TARGET bt-embedded)
+    set(PC_REQUIRES "${PC_REQUIRES} bt-embedded")
+    target_link_libraries(embedded-game-controller PUBLIC PkgConfig::BTEMBEDDED)
+    target_compile_definitions(embedded-game-controller PRIVATE WITH_BLUETOOTH=1)
+endif()
 
 if(WITH_DRIVER_DS3)
     add_compile_definitions(WITH_DRIVER_DS3)
