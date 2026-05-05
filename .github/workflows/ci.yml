@@ -37,19 +37,38 @@ jobs:
     runs-on: ubuntu-latest
     container: devkitpro/devkitppc:latest
     steps:
+      - name: Checkout bt-embedded
+        uses: actions/checkout@v4
+        with:
+          repository: embedded-game-controller/bt-embedded.git
+          ref: master
+          path: bte
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          path: egc
 
-      - name: Install g++
-        run: sudo apt-get update -y && sudo apt-get install g++ -y
+      - name: Build bt-embedded
+        run: |
+          cmake -DCMAKE_TOOLCHAIN_FILE="$DEVKITPRO/cmake/Wii.cmake" \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_EXAMPLE=OFF \
+              -DWITH_OPENOBEX=OFF \
+              -S bte -B bte/build
+          cmake --build bte/build
+          cmake --install bte/build
 
       - name: Configure
-        run: cmake -DCMAKE_TOOLCHAIN_FILE="$DEVKITPRO/cmake/Wii.cmake" -DBUILD_EXAMPLE=ON -S . -B build
+        run: |
+          /opt/devkitpro/portlibs/wii/bin/powerpc-eabi-pkg-config --cflags --libs bt-embedded
+          cmake -DCMAKE_TOOLCHAIN_FILE="$DEVKITPRO/cmake/Wii.cmake" \
+              -DBUILD_EXAMPLE=ON \
+              -S egc -B egc/build
 
       - name: Build
-        run: cmake --build build
+        run: cmake --build egc/build
 
   build-starlet:
     name: Build for Starlet
@@ -74,16 +93,34 @@ jobs:
     name: Build for Linux
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout bt-embedded
+        uses: actions/checkout@v4
+        with:
+          repository: embedded-game-controller/bt-embedded.git
+          ref: master
+          path: bte
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          path: egc
 
       - name: Install compiler and dependencies
         run: sudo apt-get update -y && sudo apt-get install build-essential cmake libusb-1.0-0-dev -y
 
+      - name: Build bt-embedded
+        run: |
+          cmake -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/deps \
+              -DBUILD_EXAMPLE=OFF \
+              -DWITH_OPENOBEX=OFF \
+              -S bte -B bte/build
+          cmake --build bte/build
+          cmake --install bte/build
+
       - name: Configure
-        run: cmake -DBUILD_EXAMPLE=ON -S . -B build
+        run: cmake -DCMAKE_PREFIX_PATH=deps -DBUILD_EXAMPLE=ON -S egc -B egc/build
 
       - name: Build
-        run: cmake --build build
+        run: cmake --build egc/build -v

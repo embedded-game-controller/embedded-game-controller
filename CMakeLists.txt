@@ -59,12 +59,6 @@ add_compile_options(
     ${EXTRA_CFLAGS}
 )
 
-if(WITH_BLUETOOTH)
-    add_subdirectory(bt-embedded)
-    link_libraries(bt-embedded)
-    include_directories(${CMAKE_SOURCE_DIR}/bt-embedded)
-    add_definitions(-DWITH_BLUETOOTH=1)
-endif()
 add_subdirectory(embedded-game-controller)
 
 if(CMAKE_SYSTEM_NAME MATCHES "Starlet")
