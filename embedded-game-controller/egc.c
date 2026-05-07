@@ -329,6 +329,46 @@ u16 egc_device_driver_parse_report(const void *raw_report, const u8 *elements,
     return (offset + 7) / 8;
 }
 
+void egc_device_driver_fill_desc(egc_device_description_t *desc, const u8 *elements)
+{
+    u8 type;
+    do {
+        type = *(elements++);
+        if (type == EGC_INPUT_REPORT_TYPE_SKIP) {
+            elements++;
+        } else if (type == EGC_INPUT_REPORT_TYPE_BUTTON4) {
+            for (int i = 0; i < 4; i++) {
+                egc_gamepad_button_e code = *(elements++);
+                if (code == EGC_GAMEPAD_BUTTON_INVALID)
+                    continue;
+
+                if (code == EGC_GAMEPAD_BUTTON_LEFT_TRIGGER) {
+                    desc->available_axes |= (1 << EGC_GAMEPAD_AXIS_LEFT_TRIGGER);
+                } else if (code == EGC_GAMEPAD_BUTTON_RIGHT_TRIGGER) {
+                    desc->available_axes |= (1 << EGC_GAMEPAD_AXIS_RIGHT_TRIGGER);
+                } else {
+                    desc->available_buttons |= (1 << code);
+                }
+            }
+        } else if (type == EGC_INPUT_REPORT_TYPE_DPAD) {
+            desc->available_buttons |= EGC_GAMEPAD_BUTTON_DPAD_UP | EGC_GAMEPAD_BUTTON_DPAD_RIGHT |
+                                       EGC_GAMEPAD_BUTTON_DPAD_DOWN | EGC_GAMEPAD_BUTTON_DPAD_LEFT;
+        } else if (type >= EGC_INPUT_REPORT_TYPE_AXIS_FIRST &&
+                   type <= EGC_INPUT_REPORT_TYPE_AXIS_LAST) {
+            egc_gamepad_axis_e axis = *(elements++);
+            if (axis == EGC_GAMEPAD_AXIS_DPADX) {
+                desc->available_buttons |=
+                    EGC_GAMEPAD_BUTTON_DPAD_RIGHT | EGC_GAMEPAD_BUTTON_DPAD_LEFT;
+            } else if (axis == EGC_GAMEPAD_AXIS_DPADY) {
+                desc->available_buttons |=
+                    EGC_GAMEPAD_BUTTON_DPAD_UP | EGC_GAMEPAD_BUTTON_DPAD_DOWN;
+            } else {
+                desc->available_axes |= (1 << axis);
+            }
+        }
+    } while (type != EGC_INPUT_REPORT_TYPE_END);
+}
+
 int egc_input_device_resume(egc_input_device_t *device)
 {
     egc_device_priv_t *priv = get_priv(device);

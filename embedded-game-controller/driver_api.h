@@ -123,6 +123,7 @@ static_assert(EGC_INPUT_REPORT_TYPE_AXIS_U16 < EGC_INPUT_REPORT_TYPE_AXIS_INVERT
 
 u16 egc_device_driver_parse_report(const void *raw_report, const u8 *elements,
                                    struct egc_input_state_t *state);
+void egc_device_driver_fill_desc(egc_device_description_t *desc, const u8 *elements);
 
 extern const egc_device_driver_t ds3_usb_device_driver;
 extern const egc_device_driver_t ds4_usb_device_driver;
