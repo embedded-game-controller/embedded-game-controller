@@ -125,6 +125,53 @@ u16 egc_device_driver_parse_report(const void *raw_report, const u8 *elements,
                                    struct egc_input_state_t *state);
 void egc_device_driver_fill_desc(egc_device_description_t *desc, const u8 *elements);
 
+static inline void egc_device_driver_set_buttons(struct egc_input_state_t *state, u32 buttons)
+{
+    *(u32 *)state->bytes |= buttons;
+}
+
+static inline void egc_device_driver_set_button(struct egc_input_state_t *state,
+                                                egc_gamepad_button_e button)
+{
+    egc_device_driver_set_buttons(state, 1 << button);
+}
+
+static inline void egc_device_driver_set_axis(struct egc_input_state_t *state,
+                                              egc_gamepad_axis_e axis, s16 value)
+{
+    s16 *axes = (s16 *)(state->bytes + _EGC_STATE_OFFSET_AXES);
+    axes[axis] = value;
+}
+
+static inline egc_accelerometer_t *
+egc_device_driver_get_accelerometer(egc_input_device_t *device, struct egc_input_state_t *state,
+                                    int index)
+{
+    egc_accelerometer_t *accel = (egc_accelerometer_t *)(state->bytes + _EGC_STATE_OFFSET_ACCEL);
+    return &accel[index];
+}
+
+static inline egc_gyroscope_t *egc_device_driver_get_gyroscope(egc_input_device_t *device,
+                                                               struct egc_input_state_t *state,
+                                                               int index)
+{
+    egc_gyroscope_t *gyro =
+        (egc_gyroscope_t *)(state->bytes + _EGC_STATE_OFFSET_ACCEL +
+                            sizeof(egc_accelerometer_t) * device->desc->num_accelerometers);
+    return &gyro[index];
+}
+
+static inline void egc_device_driver_set_touch_point(egc_input_device_t *device,
+                                                     struct egc_input_state_t *state, int index,
+                                                     egc_point_t point)
+{
+    egc_point_t *points =
+        (egc_point_t *)(state->bytes + _EGC_STATE_OFFSET_ACCEL +
+                        sizeof(egc_accelerometer_t) * device->desc->num_accelerometers +
+                        sizeof(egc_gyroscope_t) * device->desc->num_gyroscopes);
+    points[index] = point;
+}
+
 extern const egc_device_driver_t ds3_usb_device_driver;
 extern const egc_device_driver_t ds4_usb_device_driver;
 extern const egc_device_driver_t dr_usb_device_driver;

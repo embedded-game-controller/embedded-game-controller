@@ -220,20 +220,25 @@ static void ds3_get_report_cb(egc_usb_transfer_t *transfer)
 
     if (transfer->status == EGC_USB_TRANSFER_STATUS_COMPLETED) {
         u32 buttons = ds3_get_buttons(report);
-        state.gamepad.buttons =
-            egc_device_driver_map_buttons(buttons, DS3_BUTTON_COUNT, s_button_map);
+        egc_device_driver_set_buttons(
+            &state, egc_device_driver_map_buttons(buttons, DS3_BUTTON_COUNT, s_button_map));
 
         u8 axes[DS3_ANALOG_AXIS_COUNT];
         ds3_get_analog_axis(report, axes);
-        state.gamepad.axes[EGC_GAMEPAD_AXIS_LEFTX] = egc_u8_to_s16(axes[DS3_ANALOG_AXIS_LEFT_X]);
-        state.gamepad.axes[EGC_GAMEPAD_AXIS_LEFTY] = egc_u8_to_s16(axes[DS3_ANALOG_AXIS_LEFT_Y]);
-        state.gamepad.axes[EGC_GAMEPAD_AXIS_RIGHTX] = egc_u8_to_s16(axes[DS3_ANALOG_AXIS_RIGHT_X]);
-        state.gamepad.axes[EGC_GAMEPAD_AXIS_RIGHTY] = egc_u8_to_s16(axes[DS3_ANALOG_AXIS_RIGHT_Y]);
+        egc_device_driver_set_axis(&state, EGC_GAMEPAD_AXIS_LEFTX,
+                                   egc_u8_to_s16(axes[DS3_ANALOG_AXIS_LEFT_X]));
+        egc_device_driver_set_axis(&state, EGC_GAMEPAD_AXIS_LEFTY,
+                                   egc_u8_to_s16(axes[DS3_ANALOG_AXIS_LEFT_Y]));
+        egc_device_driver_set_axis(&state, EGC_GAMEPAD_AXIS_RIGHTX,
+                                   egc_u8_to_s16(axes[DS3_ANALOG_AXIS_RIGHT_X]));
+        egc_device_driver_set_axis(&state, EGC_GAMEPAD_AXIS_RIGHTY,
+                                   egc_u8_to_s16(axes[DS3_ANALOG_AXIS_RIGHT_Y]));
 
+        egc_accelerometer_t *accel = egc_device_driver_get_accelerometer(device, &state, 0);
 #define MAP_ACCEL(v) ((v) * EGC_ACCELEROMETER_RES_PER_G / DS3_ACC_RES_PER_G)
-        state.gamepad.accelerometer[0].x = MAP_ACCEL((s16)report->acc_x - 511);
-        state.gamepad.accelerometer[0].y = MAP_ACCEL(511 - (s16)report->acc_y);
-        state.gamepad.accelerometer[0].z = MAP_ACCEL(511 - (s16)report->acc_z);
+        accel->x = MAP_ACCEL((s16)report->acc_x - 511);
+        accel->y = MAP_ACCEL(511 - (s16)report->acc_y);
+        accel->z = MAP_ACCEL(511 - (s16)report->acc_z);
 #undef MAP_ACCEL
 
         egc_device_driver_report_input(device, &state);

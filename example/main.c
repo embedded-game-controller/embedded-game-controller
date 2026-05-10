@@ -12,7 +12,7 @@ static egc_input_device_t *s_devices[MAX_DEVICES];
 
 static void print_status(egc_input_device_t *device)
 {
-    u32 buttons = device->state.gamepad.buttons;
+    u32 buttons = egc_device_read_buttons(device);
 
 #define PRESSED(b) (buttons & (1 << b))
     if (PRESSED(EGC_GAMEPAD_BUTTON_SOUTH)) {
@@ -98,25 +98,25 @@ static void print_status(egc_input_device_t *device)
 
 #define HAS_AXIS(x) (device->desc->available_axes & (1 << x))
     if (HAS_AXIS(EGC_GAMEPAD_AXIS_LEFTX)) {
-        printf("L stick: %d,%d ", device->state.gamepad.axes[EGC_GAMEPAD_AXIS_LEFTX],
-               device->state.gamepad.axes[EGC_GAMEPAD_AXIS_LEFTY]);
+        printf("L stick: %d,%d ", egc_device_read_axis(device, EGC_GAMEPAD_AXIS_LEFTX),
+               egc_device_read_axis(device, EGC_GAMEPAD_AXIS_LEFTY));
     }
 
     if (HAS_AXIS(EGC_GAMEPAD_AXIS_RIGHTX)) {
-        printf("R stick: %d,%d ", device->state.gamepad.axes[EGC_GAMEPAD_AXIS_RIGHTX],
-               device->state.gamepad.axes[EGC_GAMEPAD_AXIS_RIGHTY]);
+        printf("R stick: %d,%d ", egc_device_read_axis(device, EGC_GAMEPAD_AXIS_RIGHTX),
+               egc_device_read_axis(device, EGC_GAMEPAD_AXIS_RIGHTY));
     }
 
     if (HAS_AXIS(EGC_GAMEPAD_AXIS_LEFT_TRIGGER)) {
-        printf("L trigger: %d ", device->state.gamepad.axes[EGC_GAMEPAD_AXIS_LEFT_TRIGGER]);
+        printf("L trigger: %d ", egc_device_read_axis(device, EGC_GAMEPAD_AXIS_LEFT_TRIGGER));
     }
 
     if (HAS_AXIS(EGC_GAMEPAD_AXIS_RIGHT_TRIGGER)) {
-        printf("R trigger: %d ", device->state.gamepad.axes[EGC_GAMEPAD_AXIS_RIGHT_TRIGGER]);
+        printf("R trigger: %d ", egc_device_read_axis(device, EGC_GAMEPAD_AXIS_RIGHT_TRIGGER));
     }
 
     for (int i = 0; i < device->desc->num_accelerometers; i++) {
-        egc_accelerometer_t *accel = &device->state.gamepad.accelerometer[i];
+        egc_accelerometer_t *accel = egc_device_read_accelerometer(device, i);
         printf("Accel%d (%d %d %d) ", i, accel->x, accel->y, accel->z);
     }
 
@@ -189,13 +189,14 @@ int main(int argc, char **argv)
             if (!device)
                 continue;
 
-            u32 released = previously_down & ~device->state.gamepad.buttons;
-            previously_down = device->state.gamepad.buttons;
+            u32 down = egc_device_read_buttons(device);
+            u32 released = previously_down & ~down;
+            previously_down = down;
 
-            if (device->state.gamepad.buttons)
+            if (down)
                 print_status(device);
 
-            if (device->state.gamepad.buttons & (1 << EGC_GAMEPAD_BUTTON_SOUTH)) {
+            if (down & (1 << EGC_GAMEPAD_BUTTON_SOUTH)) {
                 if (device->desc->num_leds > 0 &&
                     released & (1 << EGC_GAMEPAD_BUTTON_RIGHT_SHOULDER)) {
                     led = (led + 1) % device->desc->num_leds;
@@ -203,9 +204,7 @@ int main(int argc, char **argv)
                 }
 
                 if (device->desc->has_rumble) {
-                    u32 new_intensity =
-                        device->state.gamepad.buttons & (1 << EGC_GAMEPAD_BUTTON_LEFT_SHOULDER) ? 1
-                                                                                                : 0;
+                    u32 new_intensity = down & (1 << EGC_GAMEPAD_BUTTON_LEFT_SHOULDER) ? 1 : 0;
                     if (new_intensity != rumble_intensity) {
                         egc_input_device_set_rumble(device, new_intensity);
                         rumble_intensity = new_intensity;
