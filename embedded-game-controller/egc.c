@@ -264,11 +264,13 @@ u16 egc_device_driver_parse_report(const void *raw_report, const u8 *elements,
                 int bit_offset = offset % 8;
                 bool down = (b & (1 << (7 - (bit_offset + i)))) != 0;
                 if (code == EGC_GAMEPAD_BUTTON_LEFT_TRIGGER) {
-                    state->gamepad.axes[EGC_GAMEPAD_AXIS_LEFT_TRIGGER] = down * INT16_MAX;
+                    egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFT_TRIGGER,
+                                               down * INT16_MAX);
                 } else if (code == EGC_GAMEPAD_BUTTON_RIGHT_TRIGGER) {
-                    state->gamepad.axes[EGC_GAMEPAD_AXIS_RIGHT_TRIGGER] = down * INT16_MAX;
+                    egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_RIGHT_TRIGGER,
+                                               down * INT16_MAX);
                 } else if (down) {
-                    state->gamepad.buttons |= (1 << code);
+                    egc_device_driver_set_button(state, code);
                 }
             }
             offset += 4;
@@ -279,7 +281,7 @@ u16 egc_device_driver_parse_report(const void *raw_report, const u8 *elements,
             } else {
                 b &= 0xf;
             }
-            state->gamepad.buttons |= parse_dpad(b);
+            egc_device_driver_set_buttons(state, parse_dpad(b));
             offset += 4;
         } else if (type >= EGC_INPUT_REPORT_TYPE_AXIS_FIRST &&
                    type <= EGC_INPUT_REPORT_TYPE_AXIS_LAST) {
@@ -310,18 +312,18 @@ u16 egc_device_driver_parse_report(const void *raw_report, const u8 *elements,
 
             if (axis == EGC_GAMEPAD_AXIS_DPADX) {
                 if (value < -EGC_TRIGGER_VALUE) {
-                    state->gamepad.buttons |= 1 << EGC_GAMEPAD_BUTTON_DPAD_LEFT;
+                    egc_device_driver_set_button(state, EGC_GAMEPAD_BUTTON_DPAD_LEFT);
                 } else if (value > EGC_TRIGGER_VALUE) {
-                    state->gamepad.buttons |= 1 << EGC_GAMEPAD_BUTTON_DPAD_RIGHT;
+                    egc_device_driver_set_button(state, EGC_GAMEPAD_BUTTON_DPAD_RIGHT);
                 }
             } else if (axis == EGC_GAMEPAD_AXIS_DPADY) {
                 if (value < -EGC_TRIGGER_VALUE) {
-                    state->gamepad.buttons |= 1 << EGC_GAMEPAD_BUTTON_DPAD_UP;
+                    egc_device_driver_set_button(state, EGC_GAMEPAD_BUTTON_DPAD_UP);
                 } else if (value > EGC_TRIGGER_VALUE) {
-                    state->gamepad.buttons |= 1 << EGC_GAMEPAD_BUTTON_DPAD_DOWN;
+                    egc_device_driver_set_button(state, EGC_GAMEPAD_BUTTON_DPAD_DOWN);
                 }
             } else {
-                state->gamepad.axes[axis] = value;
+                egc_device_driver_set_axis(state, axis, value);
             }
 #undef EGC_TRIGGER_VALUE
         }

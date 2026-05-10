@@ -482,47 +482,42 @@ static bool parse_input_report(egc_input_device_t *device, const ns_input_report
         EGC_WARN("report ID: %02x", report->id);
         return false;
     }
+    s16 axes[2];
     u32 buttons = ns_get_buttons(report->button_status);
-    egc_accelerometer_t *accel = &state->gamepad.accelerometer[0];
+    egc_accelerometer_t *accel = egc_device_driver_get_accelerometer(device, state, 0);
     ns_get_accel(priv, report, accel);
     if (device->desc->product_id == NS_PID_PRO) {
-        state->gamepad.buttons =
-            egc_device_driver_map_buttons(buttons, NS_BUTTON_COUNT, s_button_map_pro);
-        ns_get_analog_axis(report->left_stick, &state->gamepad.axes[NS_ANALOG_AXIS_LEFT_X],
-                           priv->stick_cal_left);
-        state->gamepad.axes[NS_ANALOG_AXIS_LEFT_Y] =
-            -1 - state->gamepad.axes[NS_ANALOG_AXIS_LEFT_Y];
-        ns_get_analog_axis(report->right_stick, &state->gamepad.axes[NS_ANALOG_AXIS_RIGHT_X],
-                           priv->stick_cal_right);
-        state->gamepad.axes[NS_ANALOG_AXIS_RIGHT_Y] =
-            -1 - state->gamepad.axes[NS_ANALOG_AXIS_RIGHT_Y];
-        state->gamepad.axes[EGC_GAMEPAD_AXIS_LEFT_TRIGGER] =
-            ((buttons >> NS_BUTTON_ZL) & 1) * INT16_MAX;
-        state->gamepad.axes[EGC_GAMEPAD_AXIS_RIGHT_TRIGGER] =
-            ((buttons >> NS_BUTTON_ZR) & 1) * INT16_MAX;
+        egc_device_driver_set_buttons(
+            state, egc_device_driver_map_buttons(buttons, NS_BUTTON_COUNT, s_button_map_pro));
+        ns_get_analog_axis(report->left_stick, axes, priv->stick_cal_left);
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTX, axes[0]);
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTY, -1 - axes[1]);
+        ns_get_analog_axis(report->right_stick, axes, priv->stick_cal_right);
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_RIGHTX, axes[0]);
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTY, -1 - axes[1]);
+
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFT_TRIGGER,
+                                   ((buttons >> NS_BUTTON_ZL) & 1) * INT16_MAX);
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_RIGHT_TRIGGER,
+                                   ((buttons >> NS_BUTTON_ZR) & 1) * INT16_MAX);
     } else if (device->desc->product_id == NS_PID_LJC) {
-        state->gamepad.buttons =
-            egc_device_driver_map_buttons(buttons, NS_BUTTON_COUNT, s_button_map_ljc);
-        ns_get_analog_axis(report->left_stick, &state->gamepad.axes[NS_ANALOG_AXIS_LEFT_X],
-                           priv->stick_cal_left);
+        egc_device_driver_set_buttons(
+            state, egc_device_driver_map_buttons(buttons, NS_BUTTON_COUNT, s_button_map_ljc));
+        ns_get_analog_axis(report->left_stick, axes, priv->stick_cal_left);
         /* Adjust for rotation */
-        s16 original_x = state->gamepad.axes[NS_ANALOG_AXIS_LEFT_X];
-        state->gamepad.axes[NS_ANALOG_AXIS_LEFT_X] =
-            -1 - state->gamepad.axes[NS_ANALOG_AXIS_LEFT_Y];
-        state->gamepad.axes[NS_ANALOG_AXIS_LEFT_Y] = -1 - original_x;
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTX, -1 - axes[1]);
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTY, -1 - axes[0]);
 
         float tmp = accel->x;
         accel->x = accel->z;
         accel->z = -tmp;
     } else if (device->desc->product_id == NS_PID_RJC) {
-        state->gamepad.buttons =
-            egc_device_driver_map_buttons(buttons, NS_BUTTON_COUNT, s_button_map_rjc);
-        ns_get_analog_axis(report->right_stick, &state->gamepad.axes[NS_ANALOG_AXIS_LEFT_X],
-                           priv->stick_cal_right);
+        egc_device_driver_set_buttons(
+            state, egc_device_driver_map_buttons(buttons, NS_BUTTON_COUNT, s_button_map_rjc));
+        ns_get_analog_axis(report->right_stick, axes, priv->stick_cal_right);
         /* Adjust for rotation */
-        s16 original_x = state->gamepad.axes[NS_ANALOG_AXIS_LEFT_X];
-        state->gamepad.axes[NS_ANALOG_AXIS_LEFT_X] = state->gamepad.axes[NS_ANALOG_AXIS_LEFT_Y];
-        state->gamepad.axes[NS_ANALOG_AXIS_LEFT_Y] = original_x;
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTX, axes[1]);
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTY, axes[0]);
         float tmp = accel->x;
         accel->x = -accel->z;
         accel->z = -tmp;

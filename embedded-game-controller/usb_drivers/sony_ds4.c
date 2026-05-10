@@ -256,41 +256,45 @@ static void ds4_parse_input_report(egc_input_device_t *device,
 
     if (report->report_id == 0x01) {
         u32 buttons = ds4_get_buttons(report);
-        state.gamepad.buttons =
-            egc_device_driver_map_buttons(buttons, DS4_BUTTON_COUNT, s_button_map);
+        egc_device_driver_set_buttons(
+            &state, egc_device_driver_map_buttons(buttons, DS4_BUTTON_COUNT, s_button_map));
 
         u8 axes[DS4_ANALOG_AXIS_COUNT];
         ds4_get_analog_axis(report, axes);
-        state.gamepad.axes[EGC_GAMEPAD_AXIS_LEFTX] = egc_u8_to_s16(axes[DS4_ANALOG_AXIS_LEFT_X]);
-        state.gamepad.axes[EGC_GAMEPAD_AXIS_LEFTY] = egc_u8_to_s16(axes[DS4_ANALOG_AXIS_LEFT_Y]);
-        state.gamepad.axes[EGC_GAMEPAD_AXIS_RIGHTX] = egc_u8_to_s16(axes[DS4_ANALOG_AXIS_RIGHT_X]);
-        state.gamepad.axes[EGC_GAMEPAD_AXIS_RIGHTY] = egc_u8_to_s16(axes[DS4_ANALOG_AXIS_RIGHT_Y]);
+        egc_device_driver_set_axis(&state, EGC_GAMEPAD_AXIS_LEFTX,
+                                   egc_u8_to_s16(axes[DS4_ANALOG_AXIS_LEFT_X]));
+        egc_device_driver_set_axis(&state, EGC_GAMEPAD_AXIS_LEFTY,
+                                   egc_u8_to_s16(axes[DS4_ANALOG_AXIS_LEFT_Y]));
+        egc_device_driver_set_axis(&state, EGC_GAMEPAD_AXIS_RIGHTX,
+                                   egc_u8_to_s16(axes[DS4_ANALOG_AXIS_RIGHT_X]));
+        egc_device_driver_set_axis(&state, EGC_GAMEPAD_AXIS_RIGHTY,
+                                   egc_u8_to_s16(axes[DS4_ANALOG_AXIS_RIGHT_Y]));
 
+        egc_accelerometer_t *accel = egc_device_driver_get_accelerometer(device, &state, 0);
 #define MAP_ACCEL(v) ((s16)le16toh(v) * EGC_ACCELEROMETER_RES_PER_G / DS4_ACC_RES_PER_G)
-        state.gamepad.accelerometer[0].x = -MAP_ACCEL(report->accel_x);
-        state.gamepad.accelerometer[0].y = MAP_ACCEL(report->accel_y);
-        state.gamepad.accelerometer[0].z = MAP_ACCEL(report->accel_z);
+        accel->x = -MAP_ACCEL(report->accel_x);
+        accel->y = MAP_ACCEL(report->accel_y);
+        accel->z = MAP_ACCEL(report->accel_z);
 #undef MAP_ACCEL
 
 #define MAP_TOUCH_X(v) ((v) * EGC_GAMEPAD_TOUCH_RES / DS4_TOUCHPAD_W)
 #define MAP_TOUCH_Y(v) ((v) * EGC_GAMEPAD_TOUCH_RES / DS4_TOUCHPAD_H)
+        egc_point_t point;
         if (!report->finger1_nactive) {
-            state.gamepad.touch_points[0].x =
-                MAP_TOUCH_X(report->finger1_x_lo | ((u16)report->finger1_x_hi << 8));
-            state.gamepad.touch_points[0].y =
-                MAP_TOUCH_Y(report->finger1_y_lo | ((u16)report->finger1_y_hi << 4));
+            point.x = MAP_TOUCH_X(report->finger1_x_lo | ((u16)report->finger1_x_hi << 8));
+            point.y = MAP_TOUCH_Y(report->finger1_y_lo | ((u16)report->finger1_y_hi << 4));
         } else {
-            state.gamepad.touch_points[0].x = -1;
+            point.x = -1;
         }
+        egc_device_driver_set_touch_point(device, &state, 0, point);
 
         if (!report->finger2_nactive) {
-            state.gamepad.touch_points[1].x =
-                MAP_TOUCH_X(report->finger2_x_lo | ((u16)report->finger2_x_hi << 8));
-            state.gamepad.touch_points[1].y =
-                MAP_TOUCH_Y(report->finger2_y_lo | ((u16)report->finger2_y_hi << 4));
+            point.x = MAP_TOUCH_X(report->finger2_x_lo | ((u16)report->finger2_x_hi << 8));
+            point.y = MAP_TOUCH_Y(report->finger2_y_lo | ((u16)report->finger2_y_hi << 4));
         } else {
-            state.gamepad.touch_points[1].x = -1;
+            point.x = -1;
         }
+        egc_device_driver_set_touch_point(device, &state, 1, point);
 #undef MAP_TOUCH_X
 #undef MAP_TOUCH_Y
 

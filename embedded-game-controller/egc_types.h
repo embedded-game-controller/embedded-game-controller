@@ -21,4 +21,8 @@ typedef uint32_t u32;
 #define ATTRIBUTE_PACKED __attribute__((packed))
 #endif
 
+#ifndef ATTRIBUTE_DEPRECATED
+#define ATTRIBUTE_DEPRECATED __attribute__((deprecated))
+#endif
+
 #endif
