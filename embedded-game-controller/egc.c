@@ -23,6 +23,9 @@ static const egc_device_driver_t *usb_device_drivers[] = {
 #ifdef WITH_DRIVER_NINTENDO_SWITCH
     &ns_usb_device_driver,
 #endif
+#ifdef WITH_DRIVER_WIIMOTE
+    &wm_device_driver,
+#endif
 };
 
 static egc_input_device_cb s_device_added_cb = NULL;

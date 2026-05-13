@@ -177,5 +177,6 @@ extern const egc_device_driver_t ds3_usb_device_driver;
 extern const egc_device_driver_t ds4_usb_device_driver;
 extern const egc_device_driver_t dr_usb_device_driver;
 extern const egc_device_driver_t ns_usb_device_driver;
+extern const egc_device_driver_t wm_device_driver;
 
 #endif

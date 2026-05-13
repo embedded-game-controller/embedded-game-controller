@@ -31,6 +31,7 @@ add_library(embedded-game-controller STATIC
     usb_drivers/nintendo_switch.c
     usb_drivers/sony_ds3.c
     usb_drivers/sony_ds4.c
+    usb_drivers/wiimote.c
 )
 
 target_include_directories(embedded-game-controller PUBLIC
@@ -56,6 +57,8 @@ if(WITH_DEBUG)
     target_compile_definitions(embedded-game-controller PRIVATE EGC_WITH_DEBUG)
 endif()
 
+set(NEEDS_LIBM OFF)
+
 if(WITH_DRIVER_DS3)
     add_compile_definitions(WITH_DRIVER_DS3)
 endif()
@@ -65,11 +68,20 @@ endif()
 if(WITH_DRIVER_NINTENDO_SWITCH)
     add_compile_definitions(WITH_DRIVER_NINTENDO_SWITCH)
 endif()
+if(WITH_DRIVER_WIIMOTE)
+    set(NEEDS_LIBM ON)
+    add_compile_definitions(WITH_DRIVER_WIIMOTE)
+endif()
 if(WITH_DRIVER_GENERIC)
     add_compile_definitions(WITH_DRIVER_GENERIC)
 endif()
 if(WITH_GENERIC_MAPPINGS)
     add_compile_definitions(WITH_GENERIC_MAPPINGS)
+endif()
+
+if(NEEDS_LIBM)
+    target_link_libraries(embedded-game-controller PRIVATE m)
+    set(PC_EXTRA_LIBS "${PC_EXTRA_LIBS} -lm")
 endif()
 
 set(PUBLIC_HEADERS
