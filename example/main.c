@@ -112,7 +112,8 @@ static void print_status(egc_input_device_t *device)
     }
 
     if (HAS_AXIS(EGC_GAMEPAD_AXIS_RIGHT_TRIGGER)) {
-        printf("R trigger: %d ", egc_input_device_read_axis(device, EGC_GAMEPAD_AXIS_RIGHT_TRIGGER));
+        printf("R trigger: %d ",
+               egc_input_device_read_axis(device, EGC_GAMEPAD_AXIS_RIGHT_TRIGGER));
     }
 
     for (int i = 0; i < device->desc->num_accelerometers; i++) {
