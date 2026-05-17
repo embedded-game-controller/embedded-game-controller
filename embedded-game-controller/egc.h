@@ -179,27 +179,27 @@ int egc_input_device_set_rumble(egc_input_device_t *device, u32 intensity);
 #define _EGC_STATE_OFFSET_AXES  sizeof(u32)
 #define _EGC_STATE_OFFSET_ACCEL (_EGC_STATE_OFFSET_AXES + sizeof(s16) * EGC_GAMEPAD_AXIS_COUNT)
 
-static inline u32 egc_device_read_buttons(egc_input_device_t *device)
+static inline u32 egc_input_device_read_buttons(egc_input_device_t *device)
 {
     return *(u32 *)device->state.bytes;
 }
 
-static inline s16 egc_device_read_axis(egc_input_device_t *device, egc_gamepad_axis_e axis)
+static inline s16 egc_input_device_read_axis(egc_input_device_t *device, egc_gamepad_axis_e axis)
 {
     s16 *axes = (s16 *)(device->state.bytes + _EGC_STATE_OFFSET_AXES);
     return axes[axis];
 }
 
-static inline const egc_accelerometer_t *egc_device_read_accelerometer(egc_input_device_t *device,
-                                                                       int index)
+static inline const egc_accelerometer_t *
+egc_input_device_read_accelerometer(egc_input_device_t *device, int index)
 {
     egc_accelerometer_t *accel =
         (egc_accelerometer_t *)(device->state.bytes + _EGC_STATE_OFFSET_ACCEL);
     return &accel[index];
 }
 
-static inline const egc_gyroscope_t *egc_device_read_gyroscope(egc_input_device_t *device,
-                                                               int index)
+static inline const egc_gyroscope_t *egc_input_device_read_gyroscope(egc_input_device_t *device,
+                                                                     int index)
 {
     egc_gyroscope_t *gyro =
         (egc_gyroscope_t *)(device->state.bytes + _EGC_STATE_OFFSET_ACCEL +
@@ -207,7 +207,7 @@ static inline const egc_gyroscope_t *egc_device_read_gyroscope(egc_input_device_
     return &gyro[index];
 }
 
-static inline egc_point_t egc_device_read_touch_point(egc_input_device_t *device, int index)
+static inline egc_point_t egc_input_device_read_touch_point(egc_input_device_t *device, int index)
 {
     egc_point_t *points =
         (egc_point_t *)(device->state.bytes + _EGC_STATE_OFFSET_ACCEL +

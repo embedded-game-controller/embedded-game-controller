@@ -12,7 +12,7 @@ static egc_input_device_t *s_devices[MAX_DEVICES];
 
 static void print_status(egc_input_device_t *device)
 {
-    u32 buttons = egc_device_read_buttons(device);
+    u32 buttons = egc_input_device_read_buttons(device);
 
 #define PRESSED(b) (buttons & (1 << b))
     if (PRESSED(EGC_GAMEPAD_BUTTON_SOUTH)) {
@@ -98,25 +98,25 @@ static void print_status(egc_input_device_t *device)
 
 #define HAS_AXIS(x) (device->desc->available_axes & (1 << x))
     if (HAS_AXIS(EGC_GAMEPAD_AXIS_LEFTX)) {
-        printf("L stick: %d,%d ", egc_device_read_axis(device, EGC_GAMEPAD_AXIS_LEFTX),
-               egc_device_read_axis(device, EGC_GAMEPAD_AXIS_LEFTY));
+        printf("L stick: %d,%d ", egc_input_device_read_axis(device, EGC_GAMEPAD_AXIS_LEFTX),
+               egc_input_device_read_axis(device, EGC_GAMEPAD_AXIS_LEFTY));
     }
 
     if (HAS_AXIS(EGC_GAMEPAD_AXIS_RIGHTX)) {
-        printf("R stick: %d,%d ", egc_device_read_axis(device, EGC_GAMEPAD_AXIS_RIGHTX),
-               egc_device_read_axis(device, EGC_GAMEPAD_AXIS_RIGHTY));
+        printf("R stick: %d,%d ", egc_input_device_read_axis(device, EGC_GAMEPAD_AXIS_RIGHTX),
+               egc_input_device_read_axis(device, EGC_GAMEPAD_AXIS_RIGHTY));
     }
 
     if (HAS_AXIS(EGC_GAMEPAD_AXIS_LEFT_TRIGGER)) {
-        printf("L trigger: %d ", egc_device_read_axis(device, EGC_GAMEPAD_AXIS_LEFT_TRIGGER));
+        printf("L trigger: %d ", egc_input_device_read_axis(device, EGC_GAMEPAD_AXIS_LEFT_TRIGGER));
     }
 
     if (HAS_AXIS(EGC_GAMEPAD_AXIS_RIGHT_TRIGGER)) {
-        printf("R trigger: %d ", egc_device_read_axis(device, EGC_GAMEPAD_AXIS_RIGHT_TRIGGER));
+        printf("R trigger: %d ", egc_input_device_read_axis(device, EGC_GAMEPAD_AXIS_RIGHT_TRIGGER));
     }
 
     for (int i = 0; i < device->desc->num_accelerometers; i++) {
-        egc_accelerometer_t *accel = egc_device_read_accelerometer(device, i);
+        const egc_accelerometer_t *accel = egc_input_device_read_accelerometer(device, i);
         printf("Accel%d (%d %d %d) ", i, accel->x, accel->y, accel->z);
     }
 
@@ -189,7 +189,7 @@ int main(int argc, char **argv)
             if (!device)
                 continue;
 
-            u32 down = egc_device_read_buttons(device);
+            u32 down = egc_input_device_read_buttons(device);
             u32 released = previously_down & ~down;
             previously_down = down;
 
