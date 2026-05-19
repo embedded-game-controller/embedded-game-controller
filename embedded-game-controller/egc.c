@@ -252,7 +252,8 @@ u16 egc_device_driver_parse_report(const void *raw_report, const u8 *elements,
         if (type == EGC_INPUT_REPORT_TYPE_SKIP) {
             int skip_bits = *(elements++);
             offset += skip_bits;
-        } else if (type == EGC_INPUT_REPORT_TYPE_BUTTON4) {
+        } else if (type == EGC_INPUT_REPORT_TYPE_BUTTON4 ||
+                   type == EGC_INPUT_REPORT_TYPE_BUTTON4_INVERTED) {
             /* This type is always aligned to a nibble, so we never
              * increment the data pointer within this loop */
             for (int i = 0; i < 4; i++) {
@@ -261,6 +262,9 @@ u16 egc_device_driver_parse_report(const void *raw_report, const u8 *elements,
                     continue;
 
                 u8 b = data[offset / 8];
+                if (type == EGC_INPUT_REPORT_TYPE_BUTTON4_INVERTED) {
+                    b = ~b;
+                }
                 int bit_offset = offset % 8;
                 bool down = (b & (1 << (7 - (bit_offset + i)))) != 0;
                 if (code == EGC_GAMEPAD_BUTTON_LEFT_TRIGGER) {
