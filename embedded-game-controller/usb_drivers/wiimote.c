@@ -97,6 +97,32 @@ static const u8 s_elements_wiimote_btn[] = {
     /* clang-format on */
 };
 
+static const u8 s_elements_classic_btn[] = {
+    /* clang-format off */
+    EGC_INPUT_REPORT_TYPE_BUTTON4_INVERTED,
+        EGC_GAMEPAD_BUTTON_DPAD_RIGHT,
+        EGC_GAMEPAD_BUTTON_DPAD_DOWN,
+        EGC_GAMEPAD_BUTTON_LEFT_TRIGGER,
+        EGC_GAMEPAD_BUTTON_BACK,
+    EGC_INPUT_REPORT_TYPE_BUTTON4_INVERTED,
+        EGC_GAMEPAD_BUTTON_GUIDE,
+        EGC_GAMEPAD_BUTTON_START,
+        EGC_GAMEPAD_BUTTON_RIGHT_TRIGGER,
+        EGC_GAMEPAD_BUTTON_INVALID,
+    EGC_INPUT_REPORT_TYPE_BUTTON4_INVERTED,
+        EGC_GAMEPAD_BUTTON_LEFT_SHOULDER,
+        EGC_GAMEPAD_BUTTON_SOUTH,
+        EGC_GAMEPAD_BUTTON_WEST,
+        EGC_GAMEPAD_BUTTON_EAST,
+    EGC_INPUT_REPORT_TYPE_BUTTON4_INVERTED,
+        EGC_GAMEPAD_BUTTON_NORTH,
+        EGC_GAMEPAD_BUTTON_RIGHT_SHOULDER,
+        EGC_GAMEPAD_BUTTON_DPAD_LEFT,
+        EGC_GAMEPAD_BUTTON_DPAD_UP,
+    EGC_INPUT_REPORT_TYPE_END
+    /* clang-format on */
+};
+
 typedef enum ATTRIBUTE_PACKED {
     WM_STATE_IDLE = 0,
 
@@ -190,6 +216,12 @@ struct wm_private_data_t {
             struct wm_calibration_axis_t stick_x;
             struct wm_calibration_axis_t stick_y;
         } nunchuck;
+        struct wm_exp_cal_classic_t {
+            struct wm_calibration_axis_t l_stick_x;
+            struct wm_calibration_axis_t l_stick_y;
+            struct wm_calibration_axis_t r_stick_x;
+            struct wm_calibration_axis_t r_stick_y;
+        } classic;
     } exp_cal;
 } ATTRIBUTE_PACKED;
 static_assert(sizeof(struct wm_private_data_t) <= EGC_INPUT_DEVICE_DRIVER_DATA_SIZE);
@@ -731,6 +763,27 @@ static void wm_parse_exp(egc_input_device_t *device, const u8 *data, egc_input_s
         accel->x = wm_accel_value(x, ac, 0);
         accel->y = wm_accel_value(z, ac, 2);
         accel->z = -wm_accel_value(y, ac, 1);
+    } else if (priv->exp_type == EGC_WIIMOTE_EXP_CLASSIC ||
+               priv->exp_type == EGC_WIIMOTE_EXP_CLASSIC_PRO) {
+        s16 value = wm_axis_value(data[0] & 0x3f, &priv->exp_cal.classic.l_stick_x);
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTX, value);
+        value = wm_axis_value(data[1] & 0x3f, &priv->exp_cal.classic.l_stick_y);
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTY, -1 - value);
+
+        value = ((data[0] >> 3) & 0x18) | ((data[1] >> 5) & 0x6) | (data[2] >> 7);
+        value = wm_axis_value(value, &priv->exp_cal.classic.r_stick_x);
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_RIGHTX, value);
+        value = wm_axis_value(data[2] & 0x1f, &priv->exp_cal.classic.r_stick_y);
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_RIGHTY, -1 - value);
+
+        value = ((data[2] >> 2) & 0x18) | ((data[3] >> 5) & 0x7);
+        value = value * INT16_MAX / 0x1f;
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFT_TRIGGER, value);
+        value = data[3] & 0x1f;
+        value = value * INT16_MAX / 0x1f;
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_RIGHT_TRIGGER, value);
+
+        egc_device_driver_parse_report(data + 4, s_elements_classic_btn, state);
     }
 }
 
@@ -765,6 +818,19 @@ static bool wm_expansion_calibration_parse(egc_input_device_t *device, const u8 
         if (!wm_checksum(data, 15)) {
             return false;
         }
+        struct wm_exp_cal_classic_t *cal = &priv->exp_cal.classic;
+        cal->l_stick_x.max = data[0] >> 2;
+        cal->l_stick_x.min = data[1] >> 2;
+        cal->l_stick_x.center = data[2] >> 2;
+        cal->l_stick_y.max = data[3] >> 2;
+        cal->l_stick_y.min = data[4] >> 2;
+        cal->l_stick_y.center = data[5] >> 2;
+        cal->r_stick_x.max = data[6] >> 3;
+        cal->r_stick_x.min = data[7] >> 3;
+        cal->r_stick_x.center = data[8] >> 3;
+        cal->r_stick_y.max = data[9] >> 3;
+        cal->r_stick_y.min = data[10] >> 3;
+        cal->r_stick_y.center = data[11] >> 3;
     }
 
     return true;
@@ -791,6 +857,25 @@ static void wm_expansion_setup(egc_input_device_t *device)
         desc->available_axes |= BIT(EGC_GAMEPAD_AXIS_LEFT_TRIGGER) | BIT(EGC_GAMEPAD_AXIS_LEFTX) |
                                 BIT(EGC_GAMEPAD_AXIS_LEFTY);
         desc->num_accelerometers = 2;
+    } else if (priv->exp_type == EGC_WIIMOTE_EXP_CLASSIC ||
+               priv->exp_type == EGC_WIIMOTE_EXP_CLASSIC_PRO) {
+        struct wm_exp_cal_classic_t *cal = &priv->exp_cal.classic;
+        cal->l_stick_x.min = cal->l_stick_y.min = 0;
+        cal->l_stick_x.max = cal->l_stick_y.max = 63;
+        cal->l_stick_x.center = cal->l_stick_y.center = 32;
+        cal->r_stick_x.min = cal->r_stick_y.min = 0;
+        cal->r_stick_x.max = cal->r_stick_y.max = 31;
+        cal->r_stick_x.center = cal->r_stick_y.center = 16;
+
+        /* clang-format off */
+        desc->available_buttons |=
+            BIT(EGC_GAMEPAD_BUTTON_LEFT_SHOULDER) |
+            BIT(EGC_GAMEPAD_BUTTON_RIGHT_SHOULDER);
+        desc->available_axes |=
+            BIT(EGC_GAMEPAD_AXIS_LEFT_TRIGGER) | BIT(EGC_GAMEPAD_AXIS_RIGHT_TRIGGER) |
+            BIT(EGC_GAMEPAD_AXIS_LEFTX) | BIT(EGC_GAMEPAD_AXIS_LEFTY) |
+            BIT(EGC_GAMEPAD_AXIS_RIGHTX) | BIT(EGC_GAMEPAD_AXIS_RIGHTY);
+        /* clang-format on */
     }
 }
 
