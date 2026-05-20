@@ -69,6 +69,9 @@
 
 #define WM_MEM_CALIBRATION_LEN 10
 
+/* Haven't given this number mush thought, we might need to tweak it later */
+#define WM_BAR_OFFSET_Y 150
+
 #define WM_NUM_ATTEMPTS_DEFAULT 8
 
 static const u8 s_elements_wiimote_btn[] = {
@@ -252,6 +255,14 @@ static const egc_device_description_t s_device_description_wiimote = {
     .num_accelerometers = 1,
     .has_rumble = true,
 };
+
+/* We use a union since these operations cannot be done at the same time */
+static union {
+    EgcDriverWiimoteReadDataCb read_data;
+    EgcDriverWiimoteWriteDataCb write_data;
+} s_client_cb;
+static bool s_calibration_enabled = true;
+static s16 s_bar_offset_y = WM_BAR_OFFSET_Y;
 
 static inline int wm_send(egc_input_device_t *device, u8 *data, int size)
 {
@@ -671,9 +682,10 @@ static void wm_ir_resolve(egc_input_device_t *device, egc_point_t *points, egc_i
      * The scale factor is chosen in such a way that we can cover most of the
      * [-1,1] range while tracking two points.
      */
-    const float scale_factor = 0.01f;
-    px = px * scale_factor * bar_width / camera_width;
-    py = py * scale_factor * bar_width / camera_height;
+    const float scale_factor_x = 0.01f;
+    const float scale_factor_y = 0.015f;
+    px = px * scale_factor_x * bar_width / camera_width;
+    py = (py + s_bar_offset_y) * scale_factor_y * bar_width / camera_height;
     /* If we are beyong the border, keep the cursor within the range */
     if (px < -1.0f) {
         px = -1.0f;
@@ -1042,6 +1054,12 @@ static void wm_read_cb(egc_input_device_t *device, const u8 *data, u8 actual_len
 
     u8 length = (data[0] >> 4) + 1;
     u8 error_code = data[0] & 0xf;
+    if (s_client_cb.read_data) {
+        EgcDriverWiimoteReadDataCb cb = s_client_cb.read_data;
+        s_client_cb.read_data = NULL;
+        cb(device, error_code, length, data + 3);
+        return;
+    }
     bool error = length > actual_length || error_code != 0;
     if (error) {
         wm_step_retry(device);
@@ -1063,7 +1081,7 @@ static void wm_read_cb(egc_input_device_t *device, const u8 *data, u8 actual_len
         }
         wm_expansion_setup(device);
     } else if (priv->state == WM_STATE_EXP_READ_CALIBRATION) {
-        if (!wm_expansion_calibration_parse(device, data)) {
+        if (s_calibration_enabled && !wm_expansion_calibration_parse(device, data)) {
             if (wm_step_retry(device))
                 return;
         }
@@ -1095,7 +1113,9 @@ static void wm_handle_ack(egc_input_device_t *device, const u8 *report)
 
     u8 command = report[2];
     u8 error = report[3];
-    if (error != 0) {
+    /* When writing data to the expansion calibration area, "error" seems to
+     * contain the number of bytes written */
+    if (command != WM_CMD_WRITE_DATA && error != 0) {
         EGC_WARN("Error %02x on command %02x!", error, command);
         wm_step_retry(device);
         return;
@@ -1108,6 +1128,10 @@ static void wm_handle_ack(egc_input_device_t *device, const u8 *report)
         priv->state = WM_STATE_IDLE;
     } else if (priv->state == WM_STATE_IR_SET_OP2) {
         priv->ir_enabled = true;
+    } else if (s_client_cb.write_data) {
+        EgcDriverWiimoteWriteDataCb cb = s_client_cb.write_data;
+        s_client_cb.write_data = NULL;
+        cb(device, error);
     }
 
     wm_step_next(device);
@@ -1221,3 +1245,34 @@ const egc_device_driver_t wm_device_driver = {
     .intr_event = wm_driver_ops_intr_event,
 };
 bool wm_statusbar_on_top = false;
+
+EgcWiimoteExpType egc_driver_wiimote_get_exp_type(egc_input_device_t *device)
+{
+    struct wm_private_data_t *priv = PRIV(device);
+    return priv->exp_type;
+}
+
+void egc_driver_wiimote_set_bar_position(EgcDriverWiimoteBarPos position)
+{
+    s_bar_offset_y =
+        position == EGC_DRIVER_WIIMOTE_BAR_POS_BOTTOM ? WM_BAR_OFFSET_Y : -WM_BAR_OFFSET_Y;
+}
+
+void egc_driver_wiimote_set_calibration_enabled(bool enabled)
+{
+    s_calibration_enabled = enabled;
+}
+
+bool egc_driver_wiimote_read_data(egc_input_device_t *device, u32 address, u16 size,
+                                  EgcDriverWiimoteReadDataCb callback)
+{
+    s_client_cb.read_data = callback;
+    return wm_read_data(device, address, size) >= 0;
+}
+
+bool egc_driver_wiimote_write_data(egc_input_device_t *device, u32 address, void *data, u8 size,
+                                   EgcDriverWiimoteWriteDataCb callback)
+{
+    s_client_cb.write_data = callback;
+    return wm_write_data(device, address, data, size) >= 0;
+}
