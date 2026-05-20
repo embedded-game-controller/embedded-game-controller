@@ -100,6 +100,11 @@ install(TARGETS embedded-game-controller
     PUBLIC_HEADER DESTINATION "include/embedded-game-controller"
 )
 
+install(FILES
+    usb_drivers/wiimote.h
+    DESTINATION "include/embedded-game-controller/drivers"
+)
+
 configure_file(../embedded-game-controller.pc.in embedded-game-controller.pc @ONLY)
 
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/embedded-game-controller.pc
