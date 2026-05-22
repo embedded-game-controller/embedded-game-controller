@@ -610,10 +610,10 @@ void ns_active_step(egc_input_device_t *device)
 
 static int ns_init_step(egc_input_device_t *device);
 
-static void ns_copy_u16_from_le(u16 *dst, const u16 *src, size_t count)
+static void ns_copy_u16_from_le(void *dst, const void *src, size_t count)
 {
     for (int i = 0; i < count; i++)
-        dst[i] = le16toh(src[i]);
+        ((u16 *)dst)[i] = le16toh(((u16 *)src)[i]);
 }
 
 static void ns_init_step_next(egc_input_device_t *device)
@@ -700,7 +700,7 @@ static void ns_init_step_reply(egc_input_device_t *device, const void *data, u16
 
                 if (user_cal->magic == htole16(JC_CAL_USR_MAGIC)) {
                     ns_joycon_imu_cal_t imu_cal;
-                    ns_copy_u16_from_le((u16 *)&imu_cal, ((u16 *)user_cal) + 1,
+                    ns_copy_u16_from_le(&imu_cal, &user_cal->cal,
                                         sizeof(ns_joycon_imu_cal_t) / sizeof(u16));
                     ns_prepare_imu_calibration(priv, &imu_cal);
                 }
@@ -708,7 +708,7 @@ static void ns_init_step_reply(egc_input_device_t *device, const void *data, u16
                 const ns_joycon_imu_cal_t *factory_cal =
                     &report->subcmd_reply.spi_reply.imu_cal_factory;
                 ns_joycon_imu_cal_t imu_cal;
-                ns_copy_u16_from_le((u16 *)&imu_cal, (u16 *)factory_cal,
+                ns_copy_u16_from_le(&imu_cal, factory_cal,
                                     sizeof(ns_joycon_imu_cal_t) / sizeof(u16));
                 ns_prepare_imu_calibration(priv, &imu_cal);
             } else if (requested_address == htole16(JC_SPI_ADDR_STICK_CAL_LEFT_USR_MAGIC) ||
