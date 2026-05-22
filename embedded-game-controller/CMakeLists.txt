@@ -52,6 +52,10 @@ if(WITH_BLUETOOTH)
     target_compile_definitions(embedded-game-controller PRIVATE WITH_BLUETOOTH=1)
 endif()
 
+if(WITH_DEBUG)
+    target_compile_definitions(embedded-game-controller PRIVATE EGC_WITH_DEBUG)
+endif()
+
 if(WITH_DRIVER_DS3)
     add_compile_definitions(WITH_DRIVER_DS3)
 endif()
