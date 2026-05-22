@@ -18,6 +18,7 @@ project(
 )
 
 option(WITH_BLUETOOTH "Support bluetooth controllers" ON)
+option(WITH_DEBUG "Print debug messages" OFF)
 option(BUILD_EXAMPLE "Build example program" OFF)
 
 option(WITH_DRIVER_DS3 "Enable DualShock 3 driver" ON)

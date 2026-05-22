@@ -31,8 +31,6 @@
 #define NORETURN __attribute__((noreturn))
 #endif
 
-#define EGC_WITH_DEBUG
-
 #ifndef EGC_LOG
 #define EGC_LOG(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
 #endif
