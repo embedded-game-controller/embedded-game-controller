@@ -173,7 +173,7 @@ int egc_input_device_suspend(egc_input_device_t *device);
 int egc_input_device_resume(egc_input_device_t *device);
 /* led_state is a bit mask of the active leds */
 int egc_input_device_set_leds(egc_input_device_t *device, u32 led_state);
-int egc_input_device_set_rumble(egc_input_device_t *device, u32 intensity);
+int egc_input_device_set_rumble(egc_input_device_t *device, u16 low_frequency, u16 high_frequency);
 
 /* These macros are for internal use */
 #define _EGC_STATE_OFFSET_AXES  sizeof(u32)

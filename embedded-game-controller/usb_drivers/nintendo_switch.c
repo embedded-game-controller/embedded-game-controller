@@ -328,7 +328,8 @@ struct ns_private_data_t {
     u8 bt_mac_addr[6];
     u8 requested_leds;
     bool led_change_queued;
-    bool requested_rumble;
+    u8 requested_rumble_high;
+    u8 requested_rumble_low;
 };
 static_assert(sizeof(struct ns_private_data_t) <= EGC_INPUT_DEVICE_DRIVER_DATA_SIZE);
 #define PRIV(input_device) ((struct ns_private_data_t *)get_priv(input_device)->private_data)
@@ -563,6 +564,7 @@ static int ns_send_subcmd(egc_input_device_t *device, struct ns_subcmd_request *
 
 static int ns_rumble(egc_input_device_t *device)
 {
+    struct ns_private_data_t *priv = PRIV(device);
     u8 data[10] = { JC_OUTPUT_RUMBLE_ONLY, 0x00 };
 
     /* Frequency and amplitude can be configured (see the Linux driver for
@@ -570,13 +572,15 @@ static int ns_rumble(egc_input_device_t *device)
      * vibration. */
     u16 freq_hi = 0x8800;
     u8 freq_lo = 0x42;
-    u8 amp_hi = 0xae;
-    u16 amp_lo = 0x806b;
+    /* https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering/blob/master/rumble_data_table.md
+     * says that the maximum safe amplitude is 0xc8 high / 0x7200 low */
+    u8 amp_hi = priv->requested_rumble_high * 0xc8 / 0xff;
+    u16 amp_lo = priv->requested_rumble_low * 0x7200 / 0xff;
     u8 *rumble = data + 2;
     rumble[0] = rumble[4] = freq_hi >> 8;
     rumble[1] = rumble[5] = (freq_hi && 0xff) + amp_hi;
-    rumble[2] = rumble[6] = freq_lo + (amp_lo >> 8);
-    rumble[3] = rumble[7] = amp_lo & 0xff;
+    rumble[2] = rumble[6] = freq_lo + (amp_lo & 0x80);
+    rumble[3] = rumble[7] = amp_lo >> 8;
 
     return ns_send_report(device, data, sizeof(data));
 }
@@ -599,7 +603,7 @@ void ns_active_step(egc_input_device_t *device)
     if (priv->led_change_queued) {
         ns_set_player_leds(device, 0, priv->requested_leds);
         priv->led_change_queued = false;
-    } else if (priv->requested_rumble) {
+    } else if (priv->requested_rumble_high > 0 || priv->requested_rumble_low > 0) {
         ns_rumble(device);
     }
 }
@@ -885,7 +889,7 @@ static int ns_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
     /* By default, set the first led */
     priv->requested_leds = 1;
     priv->led_change_queued = true;
-    priv->requested_rumble = false;
+    priv->requested_rumble_high = priv->requested_rumble_low = 0;
     priv->pending_subcmd_id = 0;
 
     ns_joycon_imu_cal_t imu_cal;
@@ -918,15 +922,15 @@ static int ns_driver_ops_set_leds(egc_input_device_t *device, u32 leds)
     return 0;
 }
 
-static int ns_driver_ops_set_rumble(egc_input_device_t *device, bool rumble_on)
+static int ns_driver_ops_set_rumble(egc_input_device_t *device, u16 low_frequency,
+                                    u16 high_frequency)
 {
     struct ns_private_data_t *priv = PRIV(device);
-    EGC_DEBUG("on: %d", rumble_on);
-    if (rumble_on != priv->requested_rumble) {
-        priv->requested_rumble = rumble_on;
-        if (priv->init_state >= NS_INITIALIZATION_COMPLETED && priv->pending_subcmd_id == 0) {
-            ns_rumble(device);
-        }
+    EGC_DEBUG("low %d, high %d", low_frequency, high_frequency);
+    priv->requested_rumble_low = low_frequency;
+    priv->requested_rumble_high = high_frequency;
+    if (priv->init_state >= NS_INITIALIZATION_COMPLETED && priv->pending_subcmd_id == 0) {
+        ns_rumble(device);
     }
     return 0;
 }

@@ -205,9 +205,9 @@ int main(int argc, char **argv)
                 }
 
                 if (device->desc->has_rumble) {
-                    u32 new_intensity = down & (1 << EGC_GAMEPAD_BUTTON_LEFT_SHOULDER) ? 1 : 0;
+                    u16 new_intensity = down & (1 << EGC_GAMEPAD_BUTTON_LEFT_SHOULDER) ? 0xffff : 0;
                     if (new_intensity != rumble_intensity) {
-                        egc_input_device_set_rumble(device, new_intensity);
+                        egc_input_device_set_rumble(device, new_intensity, new_intensity);
                         rumble_intensity = new_intensity;
                     }
                 }

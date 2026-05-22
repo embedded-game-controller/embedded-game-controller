@@ -12,7 +12,7 @@ struct egc_device_driver_t {
     int (*init)(egc_input_device_t *device, u16 vid, u16 pid);
     int (*disconnect)(egc_input_device_t *device);
     int (*set_leds)(egc_input_device_t *device, u32 leds);
-    int (*set_rumble)(egc_input_device_t *device, bool rumble_on);
+    int (*set_rumble)(egc_input_device_t *device, u16 low_frequency, u16 high_frequency);
     bool (*timer)(egc_input_device_t *device);
     void (*intr_event)(egc_input_device_t *device, const void *data, u16 length);
     void (*ctrl_event)(egc_input_device_t *device, const void *data, u16 length);

@@ -428,14 +428,14 @@ int egc_input_device_set_leds(egc_input_device_t *device, u32 led_state)
     return 0;
 }
 
-int egc_input_device_set_rumble(egc_input_device_t *device, u32 intensity)
+int egc_input_device_set_rumble(egc_input_device_t *device, u16 low_frequency, u16 high_frequency)
 {
     egc_device_priv_t *priv = get_priv(device);
 
     EGC_DEBUG("");
 
     if (priv->driver->set_rumble)
-        return priv->driver->set_rumble(device, intensity > 0);
+        return priv->driver->set_rumble(device, low_frequency, high_frequency);
 
     return 0;
 }

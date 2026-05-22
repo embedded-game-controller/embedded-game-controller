@@ -121,7 +121,8 @@ enum ds4_analog_axis_e {
 
 struct ds4_private_data_t {
     u8 led_color[3]; /* 0 - 32 */
-    bool rumble_on;
+    u8 rumble_low;
+    u8 rumble_high;
 };
 static_assert(sizeof(struct ds4_private_data_t) <= EGC_INPUT_DEVICE_DRIVER_DATA_SIZE);
 #define PRIV(input_device) ((struct ds4_private_data_t *)get_priv(input_device)->private_data)
@@ -237,8 +238,8 @@ static inline int ds4_set_leds_rumble(egc_input_device_t *device, u8 r, u8 g, u8
         0x03,
         0x00,
         0x00,
-        rumble_small, // Fast motor
-        rumble_large, // Slow motor
+        rumble_small, // Fast motor (right)
+        rumble_large, // Slow motor (left)
         r,
         g,
         b,    // RGB
@@ -308,7 +309,7 @@ static int ds4_driver_update_leds_rumble(egc_input_device_t *device)
 
     u8 r = priv->led_color[0], g = priv->led_color[1], b = priv->led_color[2];
 
-    return ds4_set_leds_rumble(device, r, g, b, priv->rumble_on * 192, 0);
+    return ds4_set_leds_rumble(device, r, g, b, priv->rumble_high, priv->rumble_low);
 }
 
 bool ds4_driver_ops_probe(u16 vid, u16 pid)
@@ -332,7 +333,7 @@ int ds4_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
     }
     /* Init private state */
     priv->led_color[0] = priv->led_color[1] = priv->led_color[2] = 0;
-    priv->rumble_on = false;
+    priv->rumble_low = priv->rumble_high = 0;
 
     egc_device_driver_set_endpoints(device, EGC_USB_ENDPOINT_IN, 5, EGC_USB_ENDPOINT_OUT | 1, 5);
     return 0;
@@ -343,7 +344,7 @@ int ds4_driver_ops_disconnect(egc_input_device_t *device)
     struct ds4_private_data_t *priv = PRIV(device);
 
     priv->led_color[0] = priv->led_color[1] = priv->led_color[2] = 0;
-    priv->rumble_on = false;
+    priv->rumble_low = priv->rumble_high = 0;
 
     return ds4_driver_update_leds_rumble(device);
 }
@@ -381,11 +382,12 @@ int ds4_driver_ops_set_leds(egc_input_device_t *device, u32 led_state)
     return ds4_driver_update_leds_rumble(device);
 }
 
-int ds4_driver_ops_set_rumble(egc_input_device_t *device, bool rumble_on)
+int ds4_driver_ops_set_rumble(egc_input_device_t *device, u16 low_frequency, u16 high_frequency)
 {
     struct ds4_private_data_t *priv = PRIV(device);
 
-    priv->rumble_on = rumble_on;
+    priv->rumble_low = low_frequency >> 8;
+    priv->rumble_high = high_frequency >> 8;
 
     return ds4_driver_update_leds_rumble(device);
 }
