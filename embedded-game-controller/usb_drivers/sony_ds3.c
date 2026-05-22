@@ -110,7 +110,8 @@ enum ds3_analog_axis_e {
 
 struct ds3_private_data_t {
     u8 leds;
-    bool rumble_on;
+    u8 rumble_low;
+    u8 rumble_high;
 };
 static_assert(sizeof(struct ds3_private_data_t) <= EGC_INPUT_DEVICE_DRIVER_DATA_SIZE);
 #define PRIV(input_device) ((struct ds3_private_data_t *)get_priv(input_device)->private_data)
@@ -303,10 +304,11 @@ static int ds3_driver_update_leds_rumble(egc_input_device_t *device)
 
     leds = priv->leds << 1;
 
-    rumble.duration_right = priv->rumble_on * 255;
-    rumble.power_right = 255;
-    rumble.duration_left = 0;
-    rumble.power_left = 0;
+    /* Do like SDL2 does: left is low frequency, right is high */
+    rumble.duration_right = 0xff;
+    rumble.power_right = priv->rumble_high ? 0 : 1; /* right only supports 0 or 1 */
+    rumble.duration_left = 0xff;
+    rumble.power_left = priv->rumble_low;
 
     return ds3_set_leds_rumble(device, leds, &rumble);
 }
@@ -329,7 +331,7 @@ int ds3_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
 
     /* Init private state */
     priv->leds = 0;
-    priv->rumble_on = false;
+    priv->rumble_low = priv->rumble_high = 0;
 
     ret = ds3_set_operational(device);
     if (ret < 0)
@@ -343,7 +345,7 @@ int ds3_driver_ops_disconnect(egc_input_device_t *device)
     struct ds3_private_data_t *priv = PRIV(device);
 
     priv->leds = 0;
-    priv->rumble_on = false;
+    priv->rumble_low = priv->rumble_high = 0;
 
     return ds3_driver_update_leds_rumble(device);
 }
@@ -357,11 +359,12 @@ int ds3_driver_ops_set_leds(egc_input_device_t *device, u32 led_state)
     return ds3_driver_update_leds_rumble(device);
 }
 
-int ds3_driver_ops_set_rumble(egc_input_device_t *device, bool rumble_on)
+int ds3_driver_ops_set_rumble(egc_input_device_t *device, u16 low_frequency, u16 high_frequency)
 {
     struct ds3_private_data_t *priv = PRIV(device);
 
-    priv->rumble_on = rumble_on;
+    priv->rumble_low = low_frequency >> 8;
+    priv->rumble_high = high_frequency >> 8;
 
     return ds3_driver_update_leds_rumble(device);
 }
