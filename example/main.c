@@ -121,6 +121,13 @@ static void print_status(egc_input_device_t *device)
         printf("Accel%d (%d %d %d) ", i, accel->x, accel->y, accel->z);
     }
 
+    for (int i = 0; i < device->desc->num_touch_points; i++) {
+        egc_point_t p = egc_input_device_read_touch_point(device, i);
+        if (p.x >= 0) {
+            printf("Touch%d (%4d %4d) ", i, p.x >> 5, p.y >> 5);
+        }
+    }
+
     if (device->desc->available_axes || device->desc->num_accelerometers > 0) {
         printf("\n");
     }
