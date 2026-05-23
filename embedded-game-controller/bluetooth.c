@@ -403,6 +403,8 @@ int _egc_bt_intr_transfer(egc_input_device_t *input_device, void *data, u16 len)
         return -1;
 
     uint8_t *buf = bte_buffer_writer_ptr_n(&writer, len + 1);
+    if (!buf)
+        return -1;
     buf[0] = BTE_HID_TRANS_DATA | BTE_HID_REP_TYPE_OUTPUT;
     memcpy(buf + 1, data, len);
     int rc = bte_l2cap_send_message(device->s.connected.hid_intr, bte_buffer_writer_end(&writer));
