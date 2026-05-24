@@ -56,11 +56,20 @@ typedef struct {
     } s;
 } egc_bt_device_t;
 
+/* We can have at most these initialization callbacks
+ * - Starting the inquiry
+ * - Setting up the L2CAP server
+ */
+#define MAX_READY_CB 2
+
 static egc_bt_device_t s_bt_devices[EGC_BT_MAX_DEVICES];
 static BteClient *s_client;
-static bool s_inquiry_requested = false;
 static bool s_hci_ready = false;
 static BtePacketType s_packet_types;
+
+typedef void (*ReadyCb)(BteHci *hci);
+static ReadyCb s_ready_callbacks[MAX_READY_CB];
+static u8 s_ready_callbacks_count = 0;
 
 static const BteBdAddr *device_get_address(const egc_bt_device_t *device)
 {
@@ -363,14 +372,52 @@ static void inquiry_cb(BteHci *hci, const BteHciInquiryReply *reply, void *)
     }
 }
 
+static void add_ready_callback(ReadyCb callback) {
+    if (s_hci_ready) {
+        BteHci *hci = bte_hci_get(s_client);
+        callback(hci);
+    } else {
+        int i;
+        /* Check if it's already there */
+        for (i = 0; i < s_ready_callbacks_count; i++) {
+            if (s_ready_callbacks[i] == callback) {
+                return;
+            }
+        }
+        if (s_ready_callbacks_count < MAX_READY_CB) {
+            s_ready_callbacks[s_ready_callbacks_count++] = callback;
+        }
+    }
+}
+
+static void remove_ready_callback(ReadyCb callback) {
+    int dest_index = -1;
+    for (int i = 0; i < s_ready_callbacks_count; i++) {
+        if (dest_index >= 0) {
+            s_ready_callbacks[dest_index++] = s_ready_callbacks[i];
+        }
+        if (s_ready_callbacks[i] == callback) {
+            dest_index = i;
+        }
+    }
+    if (dest_index >= 0) {
+        s_ready_callbacks_count--;
+    }
+}
+
 static void initialized_cb(BteHci *hci, bool success, void *)
 {
     s_hci_ready = success;
-    EGC_DEBUG("success %d, requested %d", success, s_inquiry_requested);
+    EGC_DEBUG("success %d", success);
     s_packet_types = bte_hci_packet_types_from_features(bte_hci_get_supported_features(hci));
-    if (s_inquiry_requested) {
-        egc_bt_start_scan();
+    for (int i = 0; i < s_ready_callbacks_count; i++) {
+        s_ready_callbacks[i](hci);
     }
+}
+
+static void start_inquiry(BteHci *hci)
+{
+    bte_hci_periodic_inquiry(hci, 4, 5, BTE_LAP_GIAC, 3, 0, NULL, inquiry_cb, NULL);
 }
 
 int _egc_bt_initialize()
@@ -411,20 +458,14 @@ int _egc_bt_intr_transfer(egc_input_device_t *input_device, void *data, u16 len)
 
 int egc_bt_start_scan()
 {
-    if (!s_hci_ready) {
-        s_inquiry_requested = true;
-        return 0;
-    }
-
-    BteHci *hci = bte_hci_get(s_client);
-    bte_hci_periodic_inquiry(hci, 4, 5, BTE_LAP_GIAC, 3, 0, NULL, inquiry_cb, NULL);
+    add_ready_callback(start_inquiry);
     return 0;
 }
 
 int egc_bt_stop_scan()
 {
     if (!s_hci_ready) {
-        s_inquiry_requested = false;
+        remove_ready_callback(start_inquiry);
         return 0;
     }
 
