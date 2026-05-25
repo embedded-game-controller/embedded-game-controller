@@ -227,4 +227,7 @@ int egc_wait_events(u32 timeout_us);
 int egc_bt_start_scan();
 int egc_bt_stop_scan();
 
+int egc_bt_enter_page_mode();
+int egc_bt_leave_page_mode();
+
 #endif

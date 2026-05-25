@@ -8,6 +8,7 @@
 #include <bt-embedded/client.h>
 #include <bt-embedded/hci.h>
 #include <bt-embedded/l2cap.h>
+#include <bt-embedded/l2cap_server.h>
 #include <bt-embedded/services/hid.h>
 #include <bt-embedded/services/sdp.h>
 #include <stdio.h>
@@ -31,6 +32,7 @@
 enum {
     EGC_BT_STATE_UNUSED = 0,
     EGC_BT_STATE_INQUIRY,
+    EGC_BT_STATE_INCOMING,
     EGC_BT_STATE_PROBING,
     EGC_BT_STATE_CONNECTING,
     EGC_BT_STATE_CONNECTED,
@@ -66,6 +68,8 @@ static egc_bt_device_t s_bt_devices[EGC_BT_MAX_DEVICES];
 static BteClient *s_client;
 static bool s_hci_ready = false;
 static BtePacketType s_packet_types;
+static BteL2capServer *s_l2cap_server_hid_ctrl;
+static BteL2capServer *s_l2cap_server_hid_intr;
 
 typedef void (*ReadyCb)(BteHci *hci);
 static ReadyCb s_ready_callbacks[MAX_READY_CB];
@@ -79,7 +83,7 @@ static const BteBdAddr *device_get_address(const egc_bt_device_t *device)
         BteL2cap *l2cap = bte_sdp_client_get_l2cap(device->s.probing.sdp);
         return bte_l2cap_get_address(l2cap);
     } else if (device->state == EGC_BT_STATE_CONNECTING ||
-               device->state == EGC_BT_STATE_CONNECTED) {
+               device->state == EGC_BT_STATE_CONNECTED || device->state == EGC_BT_STATE_INCOMING) {
         return bte_l2cap_get_address(device->s.connected.hid_ctrl);
     }
 
@@ -127,7 +131,14 @@ static void bt_device_free(egc_bt_device_t *device)
     if (device->state == EGC_BT_STATE_PROBING) {
         bte_sdp_client_unref(device->s.probing.sdp);
     } else if (device->state == EGC_BT_STATE_CONNECTING ||
-               device->state == EGC_BT_STATE_CONNECTED) {
+               device->state == EGC_BT_STATE_CONNECTED || device->state == EGC_BT_STATE_INCOMING) {
+        if (device->state == EGC_BT_STATE_INCOMING) {
+            /* The SDP channel is stored in the userdata of the HID ctrl channel */
+            BteSdpClient *sdp = bte_l2cap_get_userdata(device->s.connected.hid_ctrl);
+            if (sdp) {
+                bte_sdp_client_unref(sdp);
+            }
+        }
         bte_l2cap_unref(device->s.connected.hid_ctrl);
         if (device->s.connected.hid_intr) {
             bte_l2cap_unref(device->s.connected.hid_intr);
@@ -155,11 +166,26 @@ static void hid_intr_message_received_cb(BteL2cap *l2cap, BteBufferReader *reade
     }
 }
 
-static void hid_intr_disconnected_cb(BteL2cap *l2cap, uint8_t reason, void *userdata)
+static void hid_disconnected_cb(BteL2cap *l2cap, uint8_t reason, void *userdata)
 {
     egc_bt_device_t *device = userdata;
     EGC_DEBUG("");
     bt_device_free(device);
+}
+
+static void device_set_connected(egc_bt_device_t *device)
+{
+    device->state = EGC_BT_STATE_CONNECTED;
+    /* The device is ready to be used, hand it over to the platform backend */
+    int rc = _egc_platform_backend.bt.device_add(device->input_device);
+    if (rc < 0) {
+        EGC_DEBUG("Device addition failed, rc = %d", rc);
+        bt_device_free(device);
+        return;
+    }
+
+    bte_l2cap_set_userdata(device->s.connected.hid_intr, device);
+    bte_l2cap_on_message_received(device->s.connected.hid_intr, hid_intr_message_received_cb);
 }
 
 static void hid_intr_connect_cb(BteL2cap *l2cap, const BteL2capNewConfiguredReply *reply,
@@ -173,20 +199,8 @@ static void hid_intr_connect_cb(BteL2cap *l2cap, const BteL2capNewConfiguredRepl
         return;
     }
 
-    device->state = EGC_BT_STATE_CONNECTED;
     device->s.connected.hid_intr = bte_l2cap_ref(l2cap);
-
-    /* The device is ready to be used, hand it over to the platform backend */
-    int rc = _egc_platform_backend.bt.device_add(device->input_device);
-    if (rc < 0) {
-        EGC_DEBUG("Device addition failed, rc = %d", rc);
-        bt_device_free(device);
-        return;
-    }
-
-    bte_l2cap_set_userdata(l2cap, device);
-    bte_l2cap_on_message_received(device->s.connected.hid_intr, hid_intr_message_received_cb);
-    bte_l2cap_on_acl_disconnected(l2cap, hid_intr_disconnected_cb);
+    device_set_connected(device);
 }
 
 static void hid_ctrl_connect_cb(BteL2cap *l2cap, const BteL2capNewConfiguredReply *reply,
@@ -301,9 +315,16 @@ static void sdp_service_search_attr_cb(BteSdpClient *sdp, const BteSdpServiceAtt
 
     input_device->connection = EGC_CONNECTION_BT;
 
-    const BteBdAddr *address = device_get_address(device);
-    bte_l2cap_new_configured(s_client, address, BTE_L2CAP_PSM_HID_CTRL, NULL,
-                             BTE_L2CAP_CONNECT_FLAG_NONE, NULL, hid_ctrl_connect_cb, device);
+    if (device->state == EGC_BT_STATE_PROBING) {
+        const BteBdAddr *address = device_get_address(device);
+        bte_l2cap_new_configured(s_client, address, BTE_L2CAP_PSM_HID_CTRL, NULL,
+                                 BTE_L2CAP_CONNECT_FLAG_NONE, NULL, hid_ctrl_connect_cb, device);
+    } else if (device->state == EGC_BT_STATE_INCOMING) {
+        /* HID channels are already connected, we can proceed with the identification */
+        bte_sdp_client_unref(sdp);
+        bte_l2cap_set_userdata(device->s.connected.hid_ctrl, device);
+        device_set_connected(device);
+    }
 }
 
 static void sdp_connect_cb(BteL2cap *l2cap, const BteL2capNewConfiguredReply *reply, void *userdata)
@@ -315,8 +336,13 @@ static void sdp_connect_cb(BteL2cap *l2cap, const BteL2capNewConfiguredReply *re
         return;
     }
 
-    device->state = EGC_BT_STATE_PROBING;
-    BteSdpClient *sdp = device->s.probing.sdp = bte_sdp_client_new(l2cap);
+    BteSdpClient *sdp = bte_sdp_client_new(l2cap);
+    if (device->state == EGC_BT_STATE_PROBING) {
+        device->s.probing.sdp = sdp;
+    } else if (device->state == EGC_BT_STATE_INCOMING) {
+        bte_l2cap_set_userdata(device->s.connected.hid_ctrl, sdp);
+    }
+
     /* clang-format off */
     u8 pattern[32];
     bte_sdp_de_write(pattern, sizeof(pattern),
@@ -362,6 +388,8 @@ static void inquiry_cb(BteHci *hci, const BteHciInquiryReply *reply, void *)
             continue;
         }
 
+        device->state = EGC_BT_STATE_PROBING;
+
         BteHciConnectParams params;
         params.packet_type = s_packet_types;
         params.clock_offset = r->clock_offset;
@@ -372,7 +400,8 @@ static void inquiry_cb(BteHci *hci, const BteHciInquiryReply *reply, void *)
     }
 }
 
-static void add_ready_callback(ReadyCb callback) {
+static void add_ready_callback(ReadyCb callback)
+{
     if (s_hci_ready) {
         BteHci *hci = bte_hci_get(s_client);
         callback(hci);
@@ -390,7 +419,8 @@ static void add_ready_callback(ReadyCb callback) {
     }
 }
 
-static void remove_ready_callback(ReadyCb callback) {
+static void remove_ready_callback(ReadyCb callback)
+{
     int dest_index = -1;
     for (int i = 0; i < s_ready_callbacks_count; i++) {
         if (dest_index >= 0) {
@@ -418,6 +448,82 @@ static void initialized_cb(BteHci *hci, bool success, void *)
 static void start_inquiry(BteHci *hci)
 {
     bte_hci_periodic_inquiry(hci, 4, 5, BTE_LAP_GIAC, 3, 0, NULL, inquiry_cb, NULL);
+}
+
+static void hid_configure_cb(BteL2cap *l2cap, const BteL2capConfigureReply *reply, void *userdata)
+{
+    EGC_DEBUG("rejected mask: %08x", reply->rejected_mask);
+}
+
+static void hid_state_changed_cb(BteL2cap *l2cap, BteL2capState state, void *userdata)
+{
+    const BteBdAddr *address = bte_l2cap_get_address(l2cap);
+    egc_bt_device_t *device = device_by_address(address);
+    if (!device)
+        return;
+
+    if (device->s.connected.hid_ctrl && device->s.connected.hid_intr &&
+        bte_l2cap_get_state(device->s.connected.hid_ctrl) == BTE_L2CAP_OPEN &&
+        bte_l2cap_get_state(device->s.connected.hid_intr) == BTE_L2CAP_OPEN) {
+        bte_l2cap_new_configured(s_client, address, BTE_L2CAP_PSM_SDP, NULL,
+                                 BTE_L2CAP_CONNECT_FLAG_NONE, NULL, sdp_connect_cb, device);
+    }
+}
+
+static void incoming_ctrl_connected_cb(BteL2capServer *l2cap_server, BteL2cap *l2cap,
+                                       void *userdata)
+{
+    const BteBdAddr *address = bte_l2cap_get_address(l2cap);
+    EGC_DEBUG("from " BD_ADDR_FMT, BD_ADDR_DATA(address));
+    egc_bt_device_t *device = bt_device_alloc(address);
+    device->state = EGC_BT_STATE_INCOMING;
+    device->s.connected.hid_ctrl = bte_l2cap_ref(l2cap);
+    device->s.connected.hid_intr = NULL;
+
+    bte_l2cap_configure(l2cap, NULL, hid_configure_cb, device);
+    bte_l2cap_on_state_changed(l2cap, hid_state_changed_cb);
+    bte_l2cap_on_disconnected(l2cap, hid_disconnected_cb);
+}
+
+static void incoming_intr_connected_cb(BteL2capServer *l2cap_server, BteL2cap *l2cap,
+                                       void *userdata)
+{
+    const BteBdAddr *address = bte_l2cap_get_address(l2cap);
+    egc_bt_device_t *device = device_by_address(address);
+    if (!device) {
+        return;
+    }
+
+    device->s.connected.hid_intr = bte_l2cap_ref(l2cap);
+    bte_l2cap_configure(l2cap, NULL, hid_configure_cb, device);
+    bte_l2cap_on_state_changed(l2cap, hid_state_changed_cb);
+}
+
+static bool connection_request_cb(BteL2capServer *l2cap_server, const BteBdAddr *address,
+                                  const BteClassOfDevice *cod, void *userdata)
+{
+    /* Maybe TODO: let the client decide? */
+    return true;
+}
+
+static bool decline_connection(BteL2capServer *l2cap_server, const BteBdAddr *address,
+                               const BteClassOfDevice *cod, void *userdata)
+{
+    return false;
+}
+
+static void enter_page_mode(BteHci *hci)
+{
+    s_l2cap_server_hid_ctrl = bte_l2cap_server_new(s_client, BTE_L2CAP_PSM_HID_CTRL);
+    s_l2cap_server_hid_intr = bte_l2cap_server_new(s_client, BTE_L2CAP_PSM_HID_INTR);
+    bte_l2cap_server_set_role(s_l2cap_server_hid_ctrl, BTE_HCI_ROLE_MASTER);
+    bte_l2cap_server_on_connected(s_l2cap_server_hid_ctrl, incoming_ctrl_connected_cb, NULL);
+    bte_l2cap_server_on_connected(s_l2cap_server_hid_intr, incoming_intr_connected_cb, NULL);
+    bte_l2cap_server_on_connection_request(s_l2cap_server_hid_ctrl, connection_request_cb, NULL);
+    /* Since HID clients are required to connect to the control PSM first, the
+     * ACL connection is always received on the BteL2capServer handling the
+     * control connection. */
+    bte_l2cap_server_on_connection_request(s_l2cap_server_hid_intr, decline_connection, NULL);
 }
 
 int _egc_bt_initialize()
@@ -473,6 +579,30 @@ int egc_bt_stop_scan()
     return 0;
 }
 
+int egc_bt_enter_page_mode()
+{
+    add_ready_callback(enter_page_mode);
+    return 0;
+}
+
+int egc_bt_leave_page_mode()
+{
+    if (!s_hci_ready) {
+        remove_ready_callback(enter_page_mode);
+        return 0;
+    }
+
+    if (s_l2cap_server_hid_ctrl) {
+        bte_l2cap_server_unref(s_l2cap_server_hid_ctrl);
+        s_l2cap_server_hid_ctrl = NULL;
+    }
+    if (s_l2cap_server_hid_intr) {
+        bte_l2cap_server_unref(s_l2cap_server_hid_intr);
+        s_l2cap_server_hid_intr = NULL;
+    }
+    return 0;
+}
+
 #else /* !WITH_BLUETOOTH */
 
 #include <errno.h>
@@ -497,6 +627,16 @@ int egc_bt_start_scan()
 }
 
 int egc_bt_stop_scan()
+{
+    return -ENOSYS;
+}
+
+int egc_bt_enter_page_mode()
+{
+    return -ENOSYS;
+}
+
+int egc_bt_leave_page_mode()
 {
     return -ENOSYS;
 }
