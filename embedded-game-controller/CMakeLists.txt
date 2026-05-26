@@ -26,12 +26,12 @@ add_library(embedded-game-controller STATIC
     ${PLATFORM_SOURCES}
     bluetooth.c
     egc.c
-    usb_drivers/generic.c
-    usb_drivers/generic_mappings.c
-    usb_drivers/nintendo_switch.c
-    usb_drivers/sony_ds3.c
-    usb_drivers/sony_ds4.c
-    usb_drivers/wiimote.c
+    hid_drivers/generic.c
+    hid_drivers/generic_mappings.c
+    hid_drivers/nintendo_switch.c
+    hid_drivers/sony_ds3.c
+    hid_drivers/sony_ds4.c
+    hid_drivers/wiimote.c
 )
 
 target_include_directories(embedded-game-controller PUBLIC
