@@ -475,6 +475,9 @@ static void incoming_ctrl_connected_cb(BteL2capServer *l2cap_server, BteL2cap *l
     const BteBdAddr *address = bte_l2cap_get_address(l2cap);
     EGC_DEBUG("from " BD_ADDR_FMT, BD_ADDR_DATA(address));
     egc_bt_device_t *device = bt_device_alloc(address);
+    if (!device) {
+        return;
+    }
     device->state = EGC_BT_STATE_INCOMING;
     device->s.connected.hid_ctrl = bte_l2cap_ref(l2cap);
     device->s.connected.hid_intr = NULL;
