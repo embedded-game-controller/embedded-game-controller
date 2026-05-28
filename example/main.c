@@ -121,6 +121,11 @@ static void print_status(egc_input_device_t *device)
         printf("Accel%d (%d %d %d) ", i, accel->x, accel->y, accel->z);
     }
 
+    for (int i = 0; i < device->desc->num_gyroscopes; i++) {
+        const egc_gyroscope_t *gyro = egc_input_device_read_gyroscope(device, i);
+        printf("Gyro%d (%d %d %d) ", i, gyro->x, gyro->y, gyro->z);
+    }
+
     for (int i = 0; i < device->desc->num_touch_points; i++) {
         egc_point_t p = egc_input_device_read_touch_point(device, i);
         if (p.x >= 0) {
