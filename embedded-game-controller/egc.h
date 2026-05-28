@@ -106,6 +106,7 @@ static_assert(sizeof(egc_accelerometer_t) == 6);
  * - y: observer placed above the device
  * - z: observer is the user
  */
+#define EGC_GYROSCOPE_RES 0x100
 typedef egc_accelerometer_t egc_gyroscope_t;
 
 /* Range is 0-32767. A negative x means that there is no touch */
