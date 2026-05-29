@@ -134,6 +134,7 @@ typedef enum ATTRIBUTE_PACKED {
 
     WM_STATE_CALIBRATION,
     WM_STATE_LEDS_REQ,
+    WM_STATE_RUMBLE_REQ,
     WM_STATE_REPORT_REQ,
     WM_STATE_HANDSHAKE_READ_CALIBRATION,
     WM_STATE_HANDSHAKE_COMPLETE,
@@ -203,7 +204,7 @@ struct wm_private_data_t {
     bool status_pending : 1;
     bool calibrated : 1;
     bool requested_rumble : 1;
-    bool battery_critical : 1;
+    bool active_rumble : 1;
 
     bool exp_attached : 1;
     bool exp_ready : 1;
@@ -289,7 +290,11 @@ static int wm_send_command(egc_input_device_t *device, u8 *data, int size)
     struct wm_private_data_t *priv = PRIV(device);
     if (priv->requested_rumble)
         data[1] |= WM_CMD_FLAG_RUMBLE;
-    return wm_send(device, data, size);
+    int rc = wm_send(device, data, size);
+    if (rc >= 0) {
+        priv->active_rumble = priv->requested_rumble;
+    }
+    return rc;
 }
 
 static int wm_send_report(egc_input_device_t *device, u8 report, u8 *data, int size)
@@ -1078,6 +1083,8 @@ static int wm_step(egc_input_device_t *device)
                 /* Wiibrew wiki says official games try up to three times. */
                 priv->remaining_attempts = 3;
                 priv->state = WM_STATE_MP_FIRST;
+            } else if (priv->requested_rumble != priv->active_rumble) {
+                priv->state = WM_STATE_RUMBLE_REQ;
             } else if (!priv->report_type_requested) {
                 priv->state = WM_STATE_REPORT_REQ;
             }
@@ -1091,6 +1098,12 @@ static int wm_step(egc_input_device_t *device)
             wm_mp_step(device);
         } else if (priv->state == WM_STATE_LEDS_REQ) {
             wm_set_leds(device, priv->requested_leds);
+        } else if (priv->state == WM_STATE_RUMBLE_REQ) {
+            if (priv->requested_rumble == priv->active_rumble) {
+                priv->state = WM_STATE_IDLE;
+            } else {
+                wm_request_status(device);
+            }
         } else if (priv->state == WM_STATE_REPORT_REQ) {
             wm_set_report_type(device, WM_REP_BTN_ACC_IR_EXP);
         }
@@ -1214,7 +1227,9 @@ static void wm_status_cb(egc_input_device_t *device, const u8 *data)
 
     u8 status = data[2];
     priv->leds = status >> 4;
+    /* No use for this at the moment:
     priv->battery_critical = status & WM_STATUS_BATTERY_CRITICAL;
+    */
     priv->exp_attached = status & WM_STATUS_EXP_ATTACHED;
     priv->ir_enabled = status & WM_STATUS_IR_ENABLED;
 
@@ -1354,10 +1369,23 @@ static int wm_driver_ops_set_leds(egc_input_device_t *device, u32 leds)
     return wm_request_status(device);
 }
 
+static int wm_driver_ops_set_rumble(egc_input_device_t *device, u16 low_frequency,
+                                    u16 high_frequency)
+{
+    struct wm_private_data_t *priv = PRIV(device);
+    EGC_DEBUG("low %d, high %d", low_frequency, high_frequency);
+    priv->requested_rumble = low_frequency > 0 || high_frequency > 0;
+    if (priv->state == WM_STATE_IDLE) {
+        wm_step(device);
+    }
+    return 0;
+}
+
 const egc_device_driver_t wm_device_driver = {
     .probe = wm_driver_ops_probe,
     .init = wm_driver_ops_init,
     .set_leds = wm_driver_ops_set_leds,
+    .set_rumble = wm_driver_ops_set_rumble,
     .intr_event = wm_driver_ops_intr_event,
 };
 bool wm_statusbar_on_top = false;
