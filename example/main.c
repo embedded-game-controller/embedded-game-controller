@@ -211,14 +211,17 @@ int main(int argc, char **argv)
                 print_status(device);
 
             if (down & (1 << EGC_GAMEPAD_BUTTON_SOUTH)) {
-                if (device->desc->num_leds > 0 &&
-                    released & (1 << EGC_GAMEPAD_BUTTON_RIGHT_SHOULDER)) {
+                u32 led_btn =
+                    (1 << EGC_GAMEPAD_BUTTON_RIGHT_SHOULDER) | (1 << EGC_GAMEPAD_BUTTON_DPAD_RIGHT);
+                u32 rumble_btn =
+                    (1 << EGC_GAMEPAD_BUTTON_LEFT_SHOULDER) | (1 << EGC_GAMEPAD_BUTTON_DPAD_LEFT);
+                if (device->desc->num_leds > 0 && released & led_btn) {
                     led = (led + 1) % device->desc->num_leds;
                     egc_input_device_set_leds(device, 1 << led);
                 }
 
                 if (device->desc->has_rumble) {
-                    u16 new_intensity = down & (1 << EGC_GAMEPAD_BUTTON_LEFT_SHOULDER) ? 0xffff : 0;
+                    u16 new_intensity = down & rumble_btn ? 0xffff : 0;
                     if (new_intensity != rumble_intensity) {
                         egc_input_device_set_rumble(device, new_intensity, new_intensity);
                         rumble_intensity = new_intensity;
