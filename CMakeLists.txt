@@ -52,9 +52,6 @@ endif()
 
 set(CMAKE_C_STANDARD 11)
 
-set(CMAKE_C_FLAGS_DEBUG "-g3")
-set(CMAKE_C_FLAGS_RELEASE "-O2")
-
 add_compile_options(
     ${ARCH}
     -fomit-frame-pointer
