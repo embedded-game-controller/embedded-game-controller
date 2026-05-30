@@ -45,7 +45,7 @@ endif()
 
 if(CMAKE_SYSTEM_NAME MATCHES "Starlet")
     set(ARCH -mcpu=arm926ej-s -mthumb -mthumb-interwork -mbig-endian)
-    set(EXTRA_CFLAGS -fno-builtin)
+    set(EXTRA_CFLAGS -fno-builtin -ffreestanding)
     set(EXTRA_LDFLAGS -nostdlib)
     set(EXTRA_LIBS cios-lib)
 endif()
@@ -57,7 +57,6 @@ set(CMAKE_C_FLAGS_RELEASE "-O2")
 
 add_compile_options(
     ${ARCH}
-    -ffreestanding
     -fomit-frame-pointer
     -ffunction-sections
     -Wall
