@@ -17,8 +17,14 @@
 #include "platform.h"
 #include "utils.h"
 
-/* Maximum number of connected USB controllers. Increase this if needed. */
-#define MAX_ACTIVE_DEVICES 2
+#ifndef MAX_ACTIVE_DEVICES
+/* Maximum number of connected controllers.
+ * In a Wii, we can have up to 7 bluetooth controllers, 4 Gamecube controllers,
+ * plus any controller connected to the USB port. We set 8 as a realistic limit
+ * limit. Increase this if needed.
+ */
+#define MAX_ACTIVE_DEVICES 8
+#endif /* MAX_ACTIVE_DEVICES */
 
 /* Constants */
 #define USB_MAX_DEVICES      32
