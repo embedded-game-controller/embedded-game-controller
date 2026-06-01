@@ -10,6 +10,7 @@ if(CMAKE_SYSTEM_NAME MATCHES "Starlet")
 elseif(CMAKE_SYSTEM_NAME MATCHES "NintendoWii")
     set(PLATFORM_SOURCES
         backends/wii.c
+        hid_drivers/gamecube.c
     )
 elseif(CMAKE_SYSTEM_NAME MATCHES "NintendoGameCube")
     set(PLATFORM_SOURCES
