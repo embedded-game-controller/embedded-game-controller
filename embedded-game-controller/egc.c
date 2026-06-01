@@ -450,22 +450,24 @@ int egc_input_device_set_rumble(egc_input_device_t *device, u16 low_frequency, u
 static int on_device_added(egc_input_device_t *device, u16 vid, u16 pid)
 {
     egc_device_priv_t *priv = get_priv(device);
-    const egc_device_driver_t *driver;
+    if (!priv->driver) {
+        const egc_device_driver_t *driver;
 
-    /* Find if we have a driver for that VID/PID */
-    driver = get_usb_device_driver_for(vid, pid);
-    if (!driver)
-        return -1;
+        /* Find if we have a driver for that VID/PID */
+        driver = get_usb_device_driver_for(vid, pid);
+        if (!driver)
+            return -1;
 
-    /* We have ownership, populate the device info */
-    priv->driver = driver;
-    if (driver->init) {
-        int rc = driver->init(device, vid, pid);
-        if (rc < 0)
-            return rc;
+        /* We have ownership, populate the device info */
+        priv->driver = driver;
+        if (driver->init) {
+            int rc = driver->init(device, vid, pid);
+            if (rc < 0)
+                return rc;
+        }
+
+        read_interrupts(device);
     }
-
-    read_interrupts(device);
 
     /* Inform the client */
     if (s_device_added_cb)
