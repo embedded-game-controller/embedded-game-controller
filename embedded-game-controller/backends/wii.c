@@ -101,8 +101,10 @@ static inline wii_device_t *get_usb_device_for_dev_id(s32 dev_id)
 static inline wii_device_t *get_free_device_slot(void)
 {
     for (int i = 0; i < ARRAY_SIZE(s_devices); i++) {
-        if (PUB(&s_devices[i])->connection == EGC_CONNECTION_DISCONNECTED)
+        if (PUB(&s_devices[i])->connection == EGC_CONNECTION_DISCONNECTED) {
+            memset(&s_devices[i], 0, sizeof(s_devices[0]));
             return &s_devices[i];
+        }
     }
 
     return NULL;
