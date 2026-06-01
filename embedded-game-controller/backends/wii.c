@@ -17,6 +17,8 @@
 #include "platform.h"
 #include "utils.h"
 
+#include "hid_drivers/gamecube.h"
+
 #ifndef MAX_ACTIVE_DEVICES
 /* Maximum number of connected controllers.
  * In a Wii, we can have up to 7 bluetooth controllers, 4 Gamecube controllers,
@@ -478,6 +480,10 @@ static int wii_init(egc_event_cb event_handler)
 
     s_event_handler = event_handler;
 
+    rc = _egc_gc_init(event_handler);
+    if (rc < 0)
+        return -1;
+
     rc = USB_Initialize();
     if (rc != USB_OK)
         return -1;
@@ -533,6 +539,11 @@ static int wii_report_input(egc_input_device_t *input_device, const egc_input_st
 
 static int wii_wait_events(u32 timeout_us)
 {
+    int events = _egc_gc_process_events(s_event_handler);
+    if (events > 0) {
+        /* No need to wait */
+        timeout_us = 0;
+    }
     return process_events(timeout_us);
 }
 
