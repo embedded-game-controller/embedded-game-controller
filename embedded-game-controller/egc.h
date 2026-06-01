@@ -144,6 +144,7 @@ typedef enum ATTRIBUTE_PACKED {
     EGC_CONNECTION_DISCONNECTED,
     EGC_CONNECTION_USB,
     EGC_CONNECTION_BT,
+    EGC_CONNECTION_SERIAL,
 } egc_connection_e;
 static_assert(sizeof(egc_connection_e) == 1);
 

@@ -11,6 +11,11 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "NintendoWii")
     set(PLATFORM_SOURCES
         backends/wii.c
     )
+elseif(CMAKE_SYSTEM_NAME MATCHES "NintendoGameCube")
+    set(PLATFORM_SOURCES
+        backends/gamecube.c
+        hid_drivers/gamecube.c
+    )
 elseif(LIBUSB_FOUND)
     # Use the libusb backend
     set(PLATFORM_SOURCES
