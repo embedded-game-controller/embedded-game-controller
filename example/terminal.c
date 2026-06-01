@@ -2,7 +2,7 @@
 
 bool quit_requested = false;
 
-#ifdef __wii__
+#if defined(__wii__) || defined(__gamecube__)
 
 #include <gccore.h>
 #include <stdlib.h>
