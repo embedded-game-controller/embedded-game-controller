@@ -183,9 +183,9 @@ static const egc_usb_transfer_t *wii_intr_transfer_async(egc_input_device_t *inp
         return NULL;
 
     assert(length <= sizeof(t->buffer));
-    if (length > 0) {
+    if (data)
         memcpy(t->buffer, data, length);
-    } else if (endpoint & EGC_USB_ENDPOINT_IN) {
+    if (endpoint & EGC_USB_ENDPOINT_IN && length == 0) {
         length = sizeof(t->buffer);
     }
     t->t.device = input_device;
