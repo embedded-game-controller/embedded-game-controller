@@ -337,8 +337,9 @@ static void sdp_connect_cb(BteL2cap *l2cap, const BteL2capNewConfiguredReply *re
     }
 
     BteSdpClient *sdp = bte_sdp_client_new(l2cap);
-    if (device->state == EGC_BT_STATE_PROBING) {
+    if (device->state == EGC_BT_STATE_INQUIRY) {
         device->s.probing.sdp = sdp;
+        device->state = EGC_BT_STATE_PROBING;
     } else if (device->state == EGC_BT_STATE_INCOMING) {
         bte_l2cap_set_userdata(device->s.connected.hid_ctrl, sdp);
     }
@@ -387,8 +388,6 @@ static void inquiry_cb(BteHci *hci, const BteHciInquiryReply *reply, void *)
             EGC_DEBUG("No more BT slots available");
             continue;
         }
-
-        device->state = EGC_BT_STATE_PROBING;
 
         BteHciConnectParams params;
         params.packet_type = s_packet_types;
