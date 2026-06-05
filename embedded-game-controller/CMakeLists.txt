@@ -107,7 +107,7 @@ install(TARGETS embedded-game-controller
 )
 
 install(FILES
-    usb_drivers/wiimote.h
+    hid_drivers/wiimote.h
     DESTINATION "include/embedded-game-controller/drivers"
 )
 
