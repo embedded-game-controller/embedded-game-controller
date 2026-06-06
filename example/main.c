@@ -190,7 +190,9 @@ int main(int argc, char **argv)
     int led = 0;
     u32 rumble_intensity = 0;
 
-    u32 previously_down = 0;
+    u32 previously_down[MAX_DEVICES] = {
+        0,
+    };
 
     egc_bt_enter_page_mode();
     egc_bt_start_scan();
@@ -204,8 +206,8 @@ int main(int argc, char **argv)
                 continue;
 
             u32 down = egc_input_device_read_buttons(device);
-            u32 released = previously_down & ~down;
-            previously_down = down;
+            u32 released = previously_down[i] & ~down;
+            previously_down[i] = down;
 
             if (down)
                 print_status(device);
