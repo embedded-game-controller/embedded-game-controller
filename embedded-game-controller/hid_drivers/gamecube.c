@@ -144,7 +144,7 @@ int _egc_gc_process_events(egc_event_cb event_handler)
             count++;
         }
 
-        if (connected) {
+        if (err == PAD_ERR_NONE) {
             /* We don't use egc_device_driver_report_input(), since we know we
              * are running in the main EGC thread and can modify the fields
              * directly */
@@ -166,7 +166,7 @@ int _egc_gc_process_events(egc_event_cb event_handler)
             egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_RIGHT_TRIGGER,
                                        trigger_value(s_pad[i].triggerR));
             count++;
-        } else {
+        } else if (err == PAD_ERR_NO_CONTROLLER) {
             resetBits |= (PAD_CHAN0_BIT >> i);
         }
     }
