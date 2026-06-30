@@ -156,7 +156,7 @@ int _egc_gc_process_events(egc_event_cb event_handler)
             egc_device_driver_set_buttons(state, buttons);
             egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTX, stick_value(s_pad[i].stickX));
             egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTY,
-                                       -stick_value(s_pad[i].stickY));
+                                       stick_value(-s_pad[i].stickY));
             egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_RIGHTX,
                                        stick_value(s_pad[i].substickX));
             egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_RIGHTY,
