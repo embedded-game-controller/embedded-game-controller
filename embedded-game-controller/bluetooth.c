@@ -364,6 +364,22 @@ static void sdp_connect_cb(BteL2cap *l2cap, const BteL2capNewConfiguredReply *re
                      BTE_SDP_DE_END);
     /* clang-format on */
 
+#ifdef __wii__
+    /* Hack to support wiimotes emulated by Dolphin */
+    const BteBdAddr *address = bte_l2cap_get_address(l2cap);
+    if (address->bytes[0] == 0x11 && address->bytes[1] == 0x02 && address->bytes[2] == 0x19 &&
+        address->bytes[3] == 0x79 && address->bytes[4] == 0x00) {
+        EGC_DEBUG("Dolphin wiimote, skipping SDP query");
+        egc_bt_device_desc_t desc = {
+            0,
+        };
+        desc.vendor_id = 0x057e;
+        desc.product_id = 0x0306;
+        connect_to_device(device, &desc);
+        return;
+    }
+#endif /* __wii__ */
+
     bool ok = bte_sdp_service_search_attr_req(sdp, pattern, 1000, id_list,
                                               sdp_service_search_attr_cb, device);
     if (!ok) {
