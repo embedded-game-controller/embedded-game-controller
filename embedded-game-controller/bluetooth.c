@@ -285,6 +285,34 @@ static bool parse_sdp_reply(egc_bt_device_desc_t *bt_device_desc, const uint8_t 
     return true;
 }
 
+static void connect_to_device(egc_bt_device_t *device, const egc_bt_device_desc_t *desc)
+{
+    EGC_DEBUG("VID %04x, PID %04x", desc->vendor_id, desc->product_id);
+    /* Allocate the device and initialize it, but don't invoke the driver yet. */
+    egc_input_device_t *input_device = device->input_device =
+        _egc_platform_backend.bt.device_alloc(desc);
+    if (!input_device) {
+        EGC_DEBUG("Couldn't allocate device");
+        bt_device_free(device);
+        return;
+    }
+
+    input_device->connection = EGC_CONNECTION_BT;
+
+    if (device->state == EGC_BT_STATE_PROBING) {
+        const BteBdAddr *address = device_get_address(device);
+        bte_l2cap_new_configured(s_client, address, BTE_L2CAP_PSM_HID_CTRL, NULL,
+                                 BTE_L2CAP_CONNECT_FLAG_NONE, NULL, hid_ctrl_connect_cb, device);
+    } else if (device->state == EGC_BT_STATE_INCOMING) {
+        /* The SDP channel is stored in the userdata of the HID ctrl channel */
+        BteSdpClient *sdp = bte_l2cap_get_userdata(device->s.connected.hid_ctrl);
+        bte_sdp_client_unref(sdp);
+        /* HID channels are already connected, we can proceed with the identification */
+        bte_l2cap_set_userdata(device->s.connected.hid_ctrl, device);
+        device_set_connected(device);
+    }
+}
+
 static void sdp_service_search_attr_cb(BteSdpClient *sdp, const BteSdpServiceAttrReply *reply,
                                        void *userdata)
 {
@@ -303,28 +331,7 @@ static void sdp_service_search_attr_cb(BteSdpClient *sdp, const BteSdpServiceAtt
         return;
     }
 
-    EGC_DEBUG("VID %04x, PID %04x", desc.vendor_id, desc.product_id);
-    /* Allocate the device and initialize it, but don't invoke the driver yet. */
-    egc_input_device_t *input_device = device->input_device =
-        _egc_platform_backend.bt.device_alloc(&desc);
-    if (!input_device) {
-        EGC_DEBUG("Couldn't allocate device");
-        bt_device_free(device);
-        return;
-    }
-
-    input_device->connection = EGC_CONNECTION_BT;
-
-    if (device->state == EGC_BT_STATE_PROBING) {
-        const BteBdAddr *address = device_get_address(device);
-        bte_l2cap_new_configured(s_client, address, BTE_L2CAP_PSM_HID_CTRL, NULL,
-                                 BTE_L2CAP_CONNECT_FLAG_NONE, NULL, hid_ctrl_connect_cb, device);
-    } else if (device->state == EGC_BT_STATE_INCOMING) {
-        /* HID channels are already connected, we can proceed with the identification */
-        bte_sdp_client_unref(sdp);
-        bte_l2cap_set_userdata(device->s.connected.hid_ctrl, device);
-        device_set_connected(device);
-    }
+    connect_to_device(device, &desc);
 }
 
 static void sdp_connect_cb(BteL2cap *l2cap, const BteL2capNewConfiguredReply *reply, void *userdata)
