@@ -279,6 +279,23 @@ static s16 s_bar_offset_y = WM_BAR_OFFSET_Y;
 
 static int wm_step(egc_input_device_t *device);
 
+#ifdef __wii__
+/* Wii-specific functionf to enable the sensor bar */
+#include <ogc/irq.h>
+
+static vu32 *const s_ipcReg = (u32 *)0xCD000000;
+
+static inline u32 ACR_ReadReg(u32 reg)
+{
+    return s_ipcReg[reg >> 2];
+}
+
+static inline void ACR_WriteReg(u32 reg, u32 val)
+{
+    s_ipcReg[reg >> 2] = val;
+}
+#endif /* __wii__ */
+
 static inline int wm_send(egc_input_device_t *device, u8 *data, int size)
 {
     // EGC_DEBUG_DATA(data, size);
@@ -1268,6 +1285,22 @@ static void wm_handle_ack(egc_input_device_t *device, const u8 *report)
     wm_step_next(device);
 }
 
+static void wm_enable_ir(egc_input_device_t *device, bool enabled)
+{
+    struct wm_private_data_t *priv = PRIV(device);
+    priv->ir_requested = enabled;
+
+#ifdef __wii__
+    /* Switch on/off the sensor bar */
+    u32 level = IRQ_Disable();
+    u32 value = ACR_ReadReg(0xc0) & ~0x100;
+    if (enabled)
+        value |= 0x100;
+    ACR_WriteReg(0xc0, value);
+    IRQ_Restore(level);
+#endif
+}
+
 static void wm_driver_ops_intr_event(egc_input_device_t *device, const void *data, u16 length)
 {
     struct wm_private_data_t *priv = PRIV(device);
@@ -1342,7 +1375,7 @@ static int wm_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
 {
     struct wm_private_data_t *priv = PRIV(device);
 
-    priv->ir_requested = true;
+    wm_enable_ir(device, true);
     priv->cal.zero[0] = priv->cal.zero[1] = priv->cal.zero[2] = 0x200;
     priv->cal.g_force[0] = priv->cal.g_force[1] = priv->cal.g_force[2] = 108;
 
