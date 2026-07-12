@@ -60,6 +60,41 @@ static const u8 s_elements_fake_snes[] = {
     /* clang-format on */
 };
 
+/* This might be wrong: the mapping has been taken from a chinese replica
+ * of a sixaxis controller, which presents itself as the Ipega: */
+static const u8 s_elements_ipega9023[] = {
+    /* clang-format off */
+    EGC_INPUT_REPORT_TYPE_SKIP, 8,
+    EGC_INPUT_REPORT_TYPE_AXIS_U8, EGC_GAMEPAD_AXIS_LEFTX,
+    EGC_INPUT_REPORT_TYPE_AXIS_U8, EGC_GAMEPAD_AXIS_LEFTY,
+    EGC_INPUT_REPORT_TYPE_AXIS_U8, EGC_GAMEPAD_AXIS_RIGHTX,
+    EGC_INPUT_REPORT_TYPE_AXIS_U8, EGC_GAMEPAD_AXIS_RIGHTY,
+    EGC_INPUT_REPORT_TYPE_SKIP, 4,
+    EGC_INPUT_REPORT_TYPE_DPAD,
+    EGC_INPUT_REPORT_TYPE_BUTTON4,
+        EGC_GAMEPAD_BUTTON_RIGHT_SHOULDER,
+        EGC_GAMEPAD_BUTTON_LEFT_SHOULDER,
+        EGC_GAMEPAD_BUTTON_INVALID,
+        EGC_GAMEPAD_BUTTON_NORTH,
+    EGC_INPUT_REPORT_TYPE_BUTTON4,
+        EGC_GAMEPAD_BUTTON_WEST,
+        EGC_GAMEPAD_BUTTON_INVALID,
+        EGC_GAMEPAD_BUTTON_EAST,
+        EGC_GAMEPAD_BUTTON_SOUTH,
+    EGC_INPUT_REPORT_TYPE_BUTTON4,
+        EGC_GAMEPAD_BUTTON_INVALID,
+        EGC_GAMEPAD_BUTTON_RIGHT_STICK,
+        EGC_GAMEPAD_BUTTON_LEFT_STICK,
+        EGC_GAMEPAD_BUTTON_INVALID,
+    EGC_INPUT_REPORT_TYPE_BUTTON4,
+        EGC_GAMEPAD_BUTTON_START,
+        EGC_GAMEPAD_BUTTON_BACK,
+        EGC_GAMEPAD_BUTTON_RIGHT_TRIGGER,
+        EGC_GAMEPAD_BUTTON_LEFT_TRIGGER,
+    EGC_INPUT_REPORT_TYPE_END
+    /* clang-format on */
+};
+
 /* Fake Playstation DS3 controller: same IDs as
  * https://github.com/hbiyik/hid-shanwan, but not quite the same.
  */
@@ -133,6 +168,7 @@ static const u8 s_elements_8bitdo[] = {
 static const Mapping s_mappings[] = {
     { 0x0079, 0x0006, s_elements_dragonrise }, /* DragonRise Inc. | PC TWIN SHOCK Gamepad */
     { 0x081f, 0xe401,  s_elements_fake_snes },
+    { 0x1949, 0x0402,  s_elements_ipega9023 },
     { 0x2563, 0x0575,    s_elements_shanwan },
     { 0x2dc8, 0x3106,     s_elements_8bitdo },
 };
