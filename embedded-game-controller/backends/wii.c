@@ -10,6 +10,8 @@
 
 #ifdef WITH_BLUETOOTH
 #include <bt-embedded/backends/wii.h>
+#include <bt-embedded/buffer.h>
+#include <bt-embedded/hci.h>
 
 #include "bluetooth.h"
 #endif
@@ -236,6 +238,35 @@ static void wii_bt_device_free(egc_input_device_t *input_device)
 
     s_event_handler(PUB(device), EGC_EVENT_DEVICE_REMOVED);
     wii_device_free(device);
+}
+
+static bool wii_bt_vendor_event_cb(BteHci *hci, BteBuffer *event_data, void *)
+{
+    if (event_data->size < 3)
+        return false;
+
+    const uint8_t *data = event_data->data + 2;
+
+    /* Known event codes:
+     * - 0x08: Short press of the sync button
+     * - 0x09: Long press of the sync button
+     */
+    if (data[0] == 0x08) {
+        _egc_bt_run_inquiry();
+        return true;
+    }
+
+    return false;
+}
+
+static void wii_install_vendor_event_handler(BteHci *hci)
+{
+    bte_hci_on_vendor_event(hci, wii_bt_vendor_event_cb);
+}
+
+static void wii_bt_init()
+{
+    _egc_bt_on_initialized(wii_install_vendor_event_handler);
 }
 #endif
 
@@ -495,6 +526,7 @@ static int wii_init(egc_event_cb event_handler)
 
 #if WITH_BLUETOOTH
     bte_backend_wii_set_mailbox(&s_worker_queue);
+    wii_bt_init();
 #endif
     return update_device_list();
 }
