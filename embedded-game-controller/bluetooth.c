@@ -61,8 +61,9 @@ typedef struct {
 /* We can have at most these initialization callbacks
  * - Starting the inquiry
  * - Setting up the L2CAP server
+ * - Platform backend registering a vendor callback (Wii)
  */
-#define MAX_READY_CB 2
+#define MAX_READY_CB 3
 
 static egc_bt_device_t s_bt_devices[EGC_BT_MAX_DEVICES];
 static BteClient *s_client;
@@ -71,8 +72,7 @@ static BtePacketType s_packet_types;
 static BteL2capServer *s_l2cap_server_hid_ctrl;
 static BteL2capServer *s_l2cap_server_hid_intr;
 
-typedef void (*ReadyCb)(BteHci *hci);
-static ReadyCb s_ready_callbacks[MAX_READY_CB];
+static egc_bt_initialized_cb s_ready_callbacks[MAX_READY_CB];
 static u8 s_ready_callbacks_count = 0;
 
 static const BteBdAddr *device_get_address(const egc_bt_device_t *device)
@@ -422,7 +422,7 @@ static void inquiry_cb(BteHci *hci, const BteHciInquiryReply *reply, void *)
     }
 }
 
-static void add_ready_callback(ReadyCb callback)
+static void add_ready_callback(egc_bt_initialized_cb callback)
 {
     if (s_hci_ready) {
         BteHci *hci = bte_hci_get(s_client);
@@ -441,7 +441,7 @@ static void add_ready_callback(ReadyCb callback)
     }
 }
 
-static void remove_ready_callback(ReadyCb callback)
+static void remove_ready_callback(egc_bt_initialized_cb callback)
 {
     int dest_index = -1;
     for (int i = 0; i < s_ready_callbacks_count; i++) {
@@ -585,6 +585,17 @@ int _egc_bt_intr_transfer(egc_input_device_t *input_device, void *data, u16 len)
     memcpy(buf + 1, data, len);
     int rc = bte_l2cap_send_message(device->s.connected.hid_intr, bte_buffer_writer_end(&writer));
     return rc;
+}
+
+void _egc_bt_on_initialized(egc_bt_initialized_cb callback)
+{
+    add_ready_callback(callback);
+}
+
+void _egc_bt_run_inquiry()
+{
+    BteHci *hci = bte_hci_get(s_client);
+    bte_hci_inquiry(hci, BTE_LAP_GIAC, 3, 0, NULL, inquiry_cb, NULL);
 }
 
 int egc_bt_start_scan()
