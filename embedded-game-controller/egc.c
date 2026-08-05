@@ -352,27 +352,28 @@ void egc_device_driver_fill_desc(egc_device_description_t *desc, const u8 *eleme
                     continue;
 
                 if (code == EGC_GAMEPAD_BUTTON_LEFT_TRIGGER) {
-                    desc->available_axes |= (1 << EGC_GAMEPAD_AXIS_LEFT_TRIGGER);
+                    desc->available_axes |= BIT(EGC_GAMEPAD_AXIS_LEFT_TRIGGER);
                 } else if (code == EGC_GAMEPAD_BUTTON_RIGHT_TRIGGER) {
-                    desc->available_axes |= (1 << EGC_GAMEPAD_AXIS_RIGHT_TRIGGER);
+                    desc->available_axes |= BIT(EGC_GAMEPAD_AXIS_RIGHT_TRIGGER);
                 } else {
-                    desc->available_buttons |= (1 << code);
+                    desc->available_buttons |= BIT(code);
                 }
             }
         } else if (type == EGC_INPUT_REPORT_TYPE_DPAD) {
-            desc->available_buttons |= EGC_GAMEPAD_BUTTON_DPAD_UP | EGC_GAMEPAD_BUTTON_DPAD_RIGHT |
-                                       EGC_GAMEPAD_BUTTON_DPAD_DOWN | EGC_GAMEPAD_BUTTON_DPAD_LEFT;
+            desc->available_buttons |=
+                BIT(EGC_GAMEPAD_BUTTON_DPAD_UP) | BIT(EGC_GAMEPAD_BUTTON_DPAD_RIGHT) |
+                BIT(EGC_GAMEPAD_BUTTON_DPAD_DOWN) | BIT(EGC_GAMEPAD_BUTTON_DPAD_LEFT);
         } else if (type >= EGC_INPUT_REPORT_TYPE_AXIS_FIRST &&
                    type <= EGC_INPUT_REPORT_TYPE_AXIS_LAST) {
             egc_gamepad_axis_e axis = *(elements++);
             if (axis == EGC_GAMEPAD_AXIS_DPADX) {
                 desc->available_buttons |=
-                    EGC_GAMEPAD_BUTTON_DPAD_RIGHT | EGC_GAMEPAD_BUTTON_DPAD_LEFT;
+                    BIT(EGC_GAMEPAD_BUTTON_DPAD_RIGHT) | BIT(EGC_GAMEPAD_BUTTON_DPAD_LEFT);
             } else if (axis == EGC_GAMEPAD_AXIS_DPADY) {
                 desc->available_buttons |=
-                    EGC_GAMEPAD_BUTTON_DPAD_UP | EGC_GAMEPAD_BUTTON_DPAD_DOWN;
+                    BIT(EGC_GAMEPAD_BUTTON_DPAD_UP) | BIT(EGC_GAMEPAD_BUTTON_DPAD_DOWN);
             } else {
-                desc->available_axes |= (1 << axis);
+                desc->available_axes |= BIT(axis);
             }
         }
     } while (type != EGC_INPUT_REPORT_TYPE_END);
