@@ -495,7 +495,7 @@ static bool parse_input_report(egc_input_device_t *device, const ns_input_report
         egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTY, -1 - axes[1]);
         ns_get_analog_axis(report->right_stick, axes, priv->stick_cal_right);
         egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_RIGHTX, axes[0]);
-        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTY, -1 - axes[1]);
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_RIGHTY, -1 - axes[1]);
 
         egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFT_TRIGGER,
                                    ((buttons >> NS_BUTTON_ZL) & 1) * INT16_MAX);
