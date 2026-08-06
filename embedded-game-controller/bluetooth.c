@@ -173,6 +173,12 @@ static void hid_disconnected_cb(BteL2cap *l2cap, uint8_t reason, void *userdata)
     bt_device_free(device);
 }
 
+static void watch_connection_status(BteL2cap *l2cap)
+{
+    bte_l2cap_on_disconnected(l2cap, hid_disconnected_cb);
+    bte_l2cap_on_acl_disconnected(l2cap, hid_disconnected_cb);
+}
+
 static void device_set_connected(egc_bt_device_t *device)
 {
     device->state = EGC_BT_STATE_CONNECTED;
@@ -222,6 +228,7 @@ static void hid_ctrl_connect_cb(BteL2cap *l2cap, const BteL2capNewConfiguredRepl
     bte_sdp_client_unref(sdp);
 
     bte_l2cap_set_userdata(l2cap, device);
+    watch_connection_status(l2cap);
 
     const BteBdAddr *address = device_get_address(device);
     bte_l2cap_new_configured(s_client, address, BTE_L2CAP_PSM_HID_INTR, NULL,
@@ -347,6 +354,7 @@ static void sdp_connect_cb(BteL2cap *l2cap, const BteL2capNewConfiguredReply *re
     if (device->state == EGC_BT_STATE_INQUIRY) {
         device->s.probing.sdp = sdp;
         device->state = EGC_BT_STATE_PROBING;
+        watch_connection_status(l2cap);
     } else if (device->state == EGC_BT_STATE_INCOMING) {
         bte_l2cap_set_userdata(device->s.connected.hid_ctrl, sdp);
     }
@@ -507,7 +515,7 @@ static void incoming_ctrl_connected_cb(BteL2capServer *l2cap_server, BteL2cap *l
 
     bte_l2cap_configure(l2cap, NULL, hid_configure_cb, device);
     bte_l2cap_on_state_changed(l2cap, hid_state_changed_cb);
-    bte_l2cap_on_disconnected(l2cap, hid_disconnected_cb);
+    watch_connection_status(l2cap);
 }
 
 static void incoming_intr_connected_cb(BteL2capServer *l2cap_server, BteL2cap *l2cap,
