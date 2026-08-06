@@ -22,7 +22,7 @@
 #define MAX_INQUIRY_RESPONSES 4
 
 #ifndef EGC_BT_MAX_DEVICES
-#define EGC_BT_MAX_DEVICES 4
+#define EGC_BT_MAX_DEVICES 7
 #endif
 
 #define BD_ADDR_FMT "%02x:%02x:%02x:%02x:%02x:%02x"
