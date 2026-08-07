@@ -731,15 +731,20 @@ static void wm_ir_resolve(egc_input_device_t *device, egc_point_t *points, egc_i
     float py = r0y;
 
     /* Map the coordinates to the range [0 - EGC_GAMEPAD_TOUCH_RES], taking
-     * into account that the coordinates we obtained are inversely proportinal
+     * into account that the coordinates we obtained are inversely proportional
      * to the distance (that is, they are directly proportional to bar_width).
-     * The scale factor is chosen in such a way that we can cover most of the
-     * [-1,1] range while tracking two points.
+     * The scale factor is chosen in such a way that the hand movements needed
+     * to control the cursor are as similar as possible to the Wii System Menu
+     * experience.
+     * We take the distance into account so that the angle that the hand needs
+     * to cover to walk the cursor across the screen becomes lower as the
+     * distance increases; the Wii System Menu does not seem to take this into
+     * account, but it feels more natural.
      */
-    const float scale_factor_x = 0.01f;
-    const float scale_factor_y = 0.015f;
-    px = px * scale_factor_x * bar_width / camera_width;
-    py = (py + s_bar_offset_y) * scale_factor_y * bar_width / camera_height;
+    const float scale_factor_x = 1000.f;
+    const float scale_factor_y = 1500.f;
+    px = px * scale_factor_x / (bar_width * camera_width);
+    py = (py + s_bar_offset_y) * scale_factor_y / (bar_width * camera_height);
     /* If we are beyong the border, keep the cursor within the range */
     if (px < -1.0f) {
         px = -1.0f;
