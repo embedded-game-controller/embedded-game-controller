@@ -663,6 +663,16 @@ static int wm_ir_find_bar(egc_input_device_t *device, const egc_point_t *points,
 done:
     for (int i = 0; i < num_found_points; i++) {
         egc_point_t p = points[new_camera_index[i]];
+
+        /* If the old points are available, apply some smoothing */
+        egc_point_t old_p = priv->ir_points_prev[i];
+        if (old_p.x & 0x8000) {
+            old_p.x &= 0x3ff;
+
+            p.x = (p.x + old_p.x * 3) / 4;
+            p.y = (p.y + old_p.y * 3) / 4;
+        }
+
         bar_points[i] = p;
 
         /* Also save them in the private structure for the next iteration */
