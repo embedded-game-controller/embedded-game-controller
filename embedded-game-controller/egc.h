@@ -211,6 +211,10 @@ static inline const egc_gyroscope_t *egc_input_device_read_gyroscope(egc_input_d
 
 static inline egc_point_t egc_input_device_read_touch_point(egc_input_device_t *device, int index)
 {
+    if (device->desc->num_touch_points == 0) {
+        return (egc_point_t){ -1, -1 };
+    }
+
     egc_point_t *points =
         (egc_point_t *)(device->state.bytes + _EGC_STATE_OFFSET_ACCEL +
                         sizeof(egc_accelerometer_t) * device->desc->num_accelerometers +
