@@ -39,4 +39,7 @@ typedef void (*EgcDriverWiimoteWriteDataCb)(egc_input_device_t *device, int erro
 bool egc_driver_wiimote_write_data(egc_input_device_t *device, u32 address, void *data, u8 size,
                                    EgcDriverWiimoteWriteDataCb callback);
 
+void egc_driver_wiimote_set_sideways(egc_input_device_t *device, bool held_sideways);
+void egc_driver_wiimote_set_sideways_default(bool held_sideways);
+
 #endif /* EGC_DRIVERS_WIIMOTE_H */

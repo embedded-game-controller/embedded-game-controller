@@ -216,6 +216,9 @@ struct wm_private_data_t {
     bool ir_enabled : 1;
     bool report_type_requested : 1;
 
+    bool held_sideways : 1;
+    u8 unused : 3;
+
     EgcWiimoteExpType exp_type : 4;
     u8 remaining_attempts : 4;
     /* The highest bit of x tell whether the point is valid; the next 2
@@ -275,6 +278,7 @@ static union {
     EgcDriverWiimoteWriteDataCb write_data;
 } s_client_cb;
 static bool s_calibration_enabled = true;
+static bool s_sideways_default = false;
 static s16 s_bar_offset_y = WM_BAR_OFFSET_Y;
 
 static int wm_step(egc_input_device_t *device);
@@ -1316,6 +1320,50 @@ static void wm_enable_ir(egc_input_device_t *device, bool enabled)
 #endif
 }
 
+static void wm_rotate_sideways(egc_input_device_t *device, struct egc_input_state_t *state)
+{
+    egc_accelerometer_t *accel = egc_device_driver_get_accelerometer(device, state, 0);
+    if (accel) {
+        s16 tmp = accel->x;
+        accel->x = accel->z;
+        accel->z = -tmp;
+    }
+
+    u32 *buttons = egc_device_driver_get_buttons(state);
+    u32 buttons_orig = *buttons;
+    /* We rotate the D-Pad, and also want to make it so that "1" and "2"
+     * buttons get mapped to South and East. */
+    const u32 clear_mask = BIT(EGC_GAMEPAD_BUTTON_DPAD_UP) | BIT(EGC_GAMEPAD_BUTTON_DPAD_DOWN) |
+                           BIT(EGC_GAMEPAD_BUTTON_DPAD_LEFT) | BIT(EGC_GAMEPAD_BUTTON_DPAD_RIGHT) |
+                           BIT(EGC_GAMEPAD_BUTTON_SOUTH) | BIT(EGC_GAMEPAD_BUTTON_EAST) |
+                           BIT(EGC_GAMEPAD_BUTTON_WEST) | BIT(EGC_GAMEPAD_BUTTON_NORTH);
+    *buttons &= ~clear_mask;
+    if (buttons_orig & BIT(EGC_GAMEPAD_BUTTON_DPAD_UP)) {
+        *buttons |= BIT(EGC_GAMEPAD_BUTTON_DPAD_LEFT);
+    }
+    if (buttons_orig & BIT(EGC_GAMEPAD_BUTTON_DPAD_DOWN)) {
+        *buttons |= BIT(EGC_GAMEPAD_BUTTON_DPAD_RIGHT);
+    }
+    if (buttons_orig & BIT(EGC_GAMEPAD_BUTTON_DPAD_LEFT)) {
+        *buttons |= BIT(EGC_GAMEPAD_BUTTON_DPAD_DOWN);
+    }
+    if (buttons_orig & BIT(EGC_GAMEPAD_BUTTON_DPAD_RIGHT)) {
+        *buttons |= BIT(EGC_GAMEPAD_BUTTON_DPAD_UP);
+    }
+    if (buttons_orig & BIT(EGC_GAMEPAD_BUTTON_SOUTH)) {
+        *buttons |= BIT(EGC_GAMEPAD_BUTTON_NORTH);
+    }
+    if (buttons_orig & BIT(EGC_GAMEPAD_BUTTON_EAST)) {
+        *buttons |= BIT(EGC_GAMEPAD_BUTTON_WEST);
+    }
+    if (buttons_orig & BIT(EGC_GAMEPAD_BUTTON_WEST)) {
+        *buttons |= BIT(EGC_GAMEPAD_BUTTON_SOUTH);
+    }
+    if (buttons_orig & BIT(EGC_GAMEPAD_BUTTON_NORTH)) {
+        *buttons |= BIT(EGC_GAMEPAD_BUTTON_EAST);
+    }
+}
+
 static void wm_driver_ops_intr_event(egc_input_device_t *device, const void *data, u16 length)
 {
     struct wm_private_data_t *priv = PRIV(device);
@@ -1373,6 +1421,12 @@ static void wm_driver_ops_intr_event(egc_input_device_t *device, const void *dat
         wm_ir_resolve(device, ir_points, &state);
     }
 
+    /* The Wiimote is rotated sideways: adjust the D-pad buttons and the
+     * accelerometer readings */
+    if (priv->held_sideways) {
+        wm_rotate_sideways(device, &state);
+    }
+
     // egc_device_driver_parse_report(data, priv->report_elements, &state);
     egc_device_driver_report_input(device, &state);
 }
@@ -1390,6 +1444,7 @@ static int wm_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
 {
     struct wm_private_data_t *priv = PRIV(device);
 
+    priv->held_sideways = s_sideways_default;
     wm_enable_ir(device, true);
     priv->cal.zero[0] = priv->cal.zero[1] = priv->cal.zero[2] = 0x200;
     priv->cal.g_force[0] = priv->cal.g_force[1] = priv->cal.g_force[2] = 108;
@@ -1467,4 +1522,15 @@ bool egc_driver_wiimote_write_data(egc_input_device_t *device, u32 address, void
 {
     s_client_cb.write_data = callback;
     return wm_write_data(device, address, data, size) >= 0;
+}
+
+void egc_driver_wiimote_set_sideways(egc_input_device_t *device, bool held_sideways)
+{
+    struct wm_private_data_t *priv = PRIV(device);
+    priv->held_sideways = held_sideways;
+}
+
+void egc_driver_wiimote_set_sideways_default(bool held_sideways)
+{
+    s_sideways_default = held_sideways;
 }

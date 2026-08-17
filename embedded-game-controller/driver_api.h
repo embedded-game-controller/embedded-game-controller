@@ -126,6 +126,11 @@ u16 egc_device_driver_parse_report(const void *raw_report, const u8 *elements,
                                    struct egc_input_state_t *state);
 void egc_device_driver_fill_desc(egc_device_description_t *desc, const u8 *elements);
 
+static inline u32 *egc_device_driver_get_buttons(struct egc_input_state_t *state)
+{
+    return (u32 *)state->bytes;
+}
+
 static inline void egc_device_driver_set_buttons(struct egc_input_state_t *state, u32 buttons)
 {
     *(u32 *)state->bytes |= buttons;
