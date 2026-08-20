@@ -40,8 +40,10 @@
 #define WM_REP_ACK_LEN            4
 #define WM_REP_BTN_LEN            2
 #define WM_REP_BTN_ACC_LEN        5
+#define WM_REP_BTN_EXP8_LEN       (WM_REP_BTN_LEN + 8)
 #define WM_REP_IR_BASIC_LEN       10
 #define WM_REP_BTN_ACC_IR_EXP_LEN (WM_REP_BTN_ACC_LEN + WM_REP_IR_BASIC_LEN + 6)
+#define WM_REP_BTN_ACC_EXP_LEN    (WM_REP_BTN_ACC_LEN + 16)
 
 #define WM_STATUS_BATTERY_CRITICAL 0x1
 #define WM_STATUS_EXP_ATTACHED     0x2
@@ -212,12 +214,14 @@ struct wm_private_data_t {
     bool motion_plus_probed : 1;
 
     bool motion_plus_enabled : 1;
+    bool motion_plus_requested : 1;
     bool ir_requested : 1;
     bool ir_enabled : 1;
-    bool report_type_requested : 1;
 
+    bool accel_requested : 1;
+    bool accel_enabled : 1;
     bool held_sideways : 1;
-    u8 unused : 3;
+    bool report_type_requested : 1;
 
     EgcWiimoteExpType exp_type : 4;
     u8 remaining_attempts : 4;
@@ -425,8 +429,13 @@ static int wm_mp_step(egc_input_device_t *device)
         u8 value = 0x55;
         rc = wm_write_data(device, WM_REG_MP_INIT, &value, sizeof(value));
     } else if (priv->state == WM_STATE_MP_ENABLING) {
-        u8 value = 0x04;
-        rc = wm_write_data(device, WM_REG_MP_STATUS, &value, sizeof(value));
+        if (priv->motion_plus_requested) {
+            u8 value = 0x04;
+            rc = wm_write_data(device, WM_REG_MP_STATUS, &value, sizeof(value));
+        } else {
+            u8 value = 0x55;
+            rc = wm_write_data(device, WM_REG_EXP_DECRYPT1, &value, sizeof(value));
+        }
     }
 
     return rc;
@@ -1087,6 +1096,26 @@ static int wm_calibration_read(egc_input_device_t *device)
     return wm_read_data(device, WM_MEM_CALIBRATION + offset, WM_MEM_CALIBRATION_LEN);
 }
 
+static void wm_compute_report_type(egc_input_device_t *device)
+{
+    struct wm_private_data_t *priv = PRIV(device);
+
+    u8 report_type;
+    if (priv->ir_requested) {
+        /* We also need the accelerometer, since it improves IR stability */
+        report_type = WM_REP_BTN_ACC_IR_EXP;
+        priv->accel_enabled = true;
+    } else if (priv->accel_requested) {
+        report_type = WM_REP_BTN_ACC_EXP;
+        priv->accel_enabled = true;
+    } else {
+        report_type = WM_REP_BTN_EXP8;
+        priv->accel_enabled = false;
+    }
+    EGC_DEBUG("Setting report type to %02x", report_type);
+    wm_set_report_type(device, report_type);
+}
+
 static int wm_step(egc_input_device_t *device)
 {
     struct wm_private_data_t *priv = PRIV(device);
@@ -1103,6 +1132,12 @@ static int wm_step(egc_input_device_t *device)
                 priv->state = WM_STATE_LEDS_REQ;
             } else if (priv->ir_enabled != priv->ir_requested) {
                 priv->state = WM_STATE_IR_FIRST;
+                priv->report_type_requested = false;
+            } else if (priv->accel_enabled != (priv->accel_requested || priv->ir_requested)) {
+                /* Re-evaluate the report type to be requested. We also check
+                 * the IR status, since IR works better with the accelerometer */
+                priv->state = WM_STATE_REPORT_REQ;
+                priv->report_type_requested = false;
             } else if (priv->exp_attached != priv->exp_ready) {
                 if (!priv->exp_attached) {
                     /* If we disconnected an expansion and we have the Motion+,
@@ -1119,6 +1154,10 @@ static int wm_step(egc_input_device_t *device)
                 /* Wiibrew wiki says official games try up to three times. */
                 priv->remaining_attempts = 3;
                 priv->state = WM_STATE_MP_FIRST;
+            } else if (priv->exp_motion_plus &&
+                       priv->motion_plus_enabled != priv->motion_plus_requested) {
+                priv->remaining_attempts = 3;
+                priv->state = WM_STATE_MP_ENABLING;
             } else if (priv->requested_rumble != priv->active_rumble) {
                 priv->state = WM_STATE_RUMBLE_REQ;
             } else if (!priv->report_type_requested) {
@@ -1141,7 +1180,7 @@ static int wm_step(egc_input_device_t *device)
                 wm_request_status(device);
             }
         } else if (priv->state == WM_STATE_REPORT_REQ) {
-            wm_set_report_type(device, WM_REP_BTN_ACC_IR_EXP);
+            wm_compute_report_type(device);
         }
     } while (priv->state == WM_STATE_IDLE && priv->state != old_state);
     return 0;
@@ -1152,9 +1191,12 @@ static void wm_step_next(egc_input_device_t *device)
     struct wm_private_data_t *priv = PRIV(device);
     priv->remaining_attempts = WM_NUM_ATTEMPTS_DEFAULT;
 
-    if ((priv->state >= WM_STATE_IR_FIRST && priv->state < WM_STATE_IR_LAST) ||
-        (priv->state >= WM_STATE_EXP_FIRST && priv->state < WM_STATE_EXP_LAST) ||
-        (priv->state >= WM_STATE_MP_FIRST && priv->state < WM_STATE_MP_LAST)) {
+    if (priv->state == WM_STATE_IR_ENABLE_LOGIC && !priv->ir_requested) {
+        priv->state = WM_STATE_IDLE;
+        wm_request_status(device);
+    } else if ((priv->state >= WM_STATE_IR_FIRST && priv->state < WM_STATE_IR_LAST) ||
+               (priv->state >= WM_STATE_EXP_FIRST && priv->state < WM_STATE_EXP_LAST) ||
+               (priv->state >= WM_STATE_MP_FIRST && priv->state < WM_STATE_MP_LAST)) {
         priv->state++;
     } else if (priv->state == WM_STATE_MP_LAST) {
         /* Initialize the Motion+ as a normal extension, but skip the decrypt
@@ -1294,7 +1336,7 @@ static void wm_handle_ack(egc_input_device_t *device, const u8 *report)
     } else if (priv->state == WM_STATE_IR_SET_OP2) {
         priv->ir_enabled = true;
     } else if (priv->state == WM_STATE_MP_ENABLING) {
-        priv->motion_plus_enabled = true;
+        priv->motion_plus_enabled = priv->motion_plus_requested;
     } else if (s_client_cb.write_data) {
         EgcDriverWiimoteWriteDataCb cb = s_client_cb.write_data;
         s_client_cb.write_data = NULL;
@@ -1310,13 +1352,15 @@ static void wm_enable_ir(egc_input_device_t *device, bool enabled)
     priv->ir_requested = enabled;
 
 #ifdef __wii__
-    /* Switch on/off the sensor bar */
-    u32 level = IRQ_Disable();
-    u32 value = ACR_ReadReg(0xc0) & ~0x100;
-    if (enabled)
+    /* Switch on the sensor bar; we don't switch it off because other wiimotes
+     * might be needing it. */
+    if (enabled) {
+        u32 level = IRQ_Disable();
+        u32 value = ACR_ReadReg(0xc0) & ~0x100;
         value |= 0x100;
-    ACR_WriteReg(0xc0, value);
-    IRQ_Restore(level);
+        ACR_WriteReg(0xc0, value);
+        IRQ_Restore(level);
+    }
 #endif
 }
 
@@ -1398,6 +1442,19 @@ static void wm_driver_ops_intr_event(egc_input_device_t *device, const void *dat
         wm_handle_ack(device, report);
         wm_parse_buttons(report, &state);
         break;
+    case WM_REP_BTN_ACC_EXP:
+        if (length < WM_REP_BTN_ACC_EXP_LEN)
+            return;
+        wm_parse_exp(device, report + WM_REP_BTN_ACC_LEN, &state);
+        wm_parse_accel(device, report, &priv->cal, &state);
+        wm_parse_buttons(report, &state);
+        break;
+    case WM_REP_BTN_EXP8:
+        if (length < WM_REP_BTN_EXP8_LEN)
+            return;
+        wm_parse_exp(device, report + WM_REP_BTN_LEN, &state);
+        wm_parse_buttons(report, &state);
+        break;
     case WM_REP_BTN_ACC_IR_EXP:
         if (length < WM_REP_BTN_ACC_IR_EXP_LEN)
             return;
@@ -1445,7 +1502,9 @@ static int wm_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
     struct wm_private_data_t *priv = PRIV(device);
 
     priv->held_sideways = s_sideways_default;
-    wm_enable_ir(device, true);
+    priv->motion_plus_requested = _egc_enable_gyroscope_default;
+    priv->accel_requested = _egc_enable_accelerometer_default;
+    wm_enable_ir(device, _egc_enable_touch_point_default);
     priv->cal.zero[0] = priv->cal.zero[1] = priv->cal.zero[2] = 0x200;
     priv->cal.g_force[0] = priv->cal.g_force[1] = priv->cal.g_force[2] = 108;
 
@@ -1484,12 +1543,48 @@ static int wm_driver_ops_set_rumble(egc_input_device_t *device, u16 low_frequenc
     return 0;
 }
 
+int wm_driver_ops_enable_accelerometer(egc_input_device_t *device, int index, bool enabled)
+{
+    struct wm_private_data_t *priv = PRIV(device);
+
+    priv->accel_requested = enabled;
+    if (priv->state == WM_STATE_IDLE) {
+        wm_step(device);
+    }
+    return 0;
+}
+
+int wm_driver_ops_enable_gyroscope(egc_input_device_t *device, int index, bool enabled)
+{
+    struct wm_private_data_t *priv = PRIV(device);
+
+    priv->motion_plus_requested = enabled;
+    if (priv->state == WM_STATE_IDLE) {
+        wm_step(device);
+    }
+    return 0;
+}
+
+int wm_driver_ops_enable_touch_points(egc_input_device_t *device, int index, bool enabled)
+{
+    struct wm_private_data_t *priv = PRIV(device);
+
+    wm_enable_ir(device, enabled);
+    if (priv->state == WM_STATE_IDLE) {
+        wm_step(device);
+    }
+    return 0;
+}
+
 const egc_device_driver_t wm_device_driver = {
     .probe = wm_driver_ops_probe,
     .init = wm_driver_ops_init,
     .set_leds = wm_driver_ops_set_leds,
     .set_rumble = wm_driver_ops_set_rumble,
     .intr_event = wm_driver_ops_intr_event,
+    .enable_accelerometer = wm_driver_ops_enable_accelerometer,
+    .enable_gyroscope = wm_driver_ops_enable_gyroscope,
+    .enable_touch_points = wm_driver_ops_enable_touch_points,
 };
 bool wm_statusbar_on_top = false;
 
