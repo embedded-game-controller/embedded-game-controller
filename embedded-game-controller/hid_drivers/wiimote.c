@@ -441,10 +441,12 @@ static int wm_mp_step(egc_input_device_t *device)
     return rc;
 }
 
-static int wm_set_report_type(egc_input_device_t *device, u8 report_type)
+static int wm_set_report_type(egc_input_device_t *device, u8 report_type, bool continuous)
 {
     u8 data[3];
-    data[1] = WM_CMD_FLAG_ACK | WM_CMD_FLAG_ENABLE; /* enable continuous reporting */
+    data[1] = WM_CMD_FLAG_ACK;
+    if (continuous)
+        data[1] |= WM_CMD_FLAG_ENABLE;
     data[2] = report_type;
     return wm_send_report(device, WM_CMD_SET_REPORT_TYPE, data, sizeof(data));
 }
@@ -1113,7 +1115,7 @@ static void wm_compute_report_type(egc_input_device_t *device)
         priv->accel_enabled = false;
     }
     EGC_DEBUG("Setting report type to %02x", report_type);
-    wm_set_report_type(device, report_type);
+    wm_set_report_type(device, report_type, false);
 }
 
 static int wm_step(egc_input_device_t *device)
