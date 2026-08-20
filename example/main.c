@@ -230,6 +230,26 @@ int main(int argc, char **argv)
                     }
                 }
             }
+            if (down & (1 << EGC_GAMEPAD_BUTTON_EAST)) {
+                if (released & (1 << EGC_GAMEPAD_BUTTON_DPAD_LEFT)) {
+                    static bool enabled = true;
+                    enabled = !enabled;
+                    printf("%s accelerometer\n", enabled ? "Enabling" : "Disabling");
+                    egc_input_device_enable_accelerometer(device, 0, enabled);
+                }
+                if (released & (1 << EGC_GAMEPAD_BUTTON_DPAD_DOWN)) {
+                    static bool enabled = true;
+                    enabled = !enabled;
+                    printf("%s IR\n", enabled ? "Enabling" : "Disabling");
+                    egc_input_device_enable_touch_point(device, 0, enabled);
+                }
+                if (released & (1 << EGC_GAMEPAD_BUTTON_DPAD_UP)) {
+                    static bool enabled = true;
+                    enabled = !enabled;
+                    printf("%s gyroscope\n", enabled ? "Enabling" : "Disabling");
+                    egc_input_device_enable_gyroscope(device, 0, enabled);
+                }
+            }
         }
     }
 

@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -27,6 +28,10 @@ static const egc_device_driver_t *usb_device_drivers[] = {
     &wm_device_driver,
 #endif
 };
+
+bool _egc_enable_accelerometer_default = true;
+bool _egc_enable_gyroscope_default = true;
+bool _egc_enable_touch_point_default = true;
 
 static egc_input_device_cb s_device_added_cb = NULL;
 static egc_input_device_cb s_device_removed_cb = NULL;
@@ -539,6 +544,53 @@ int egc_initialize(egc_input_device_cb added_cb, egc_input_device_cb removed_cb,
 #endif
 
     return rc;
+}
+
+int egc_input_device_enable_accelerometer(egc_input_device_t *device, int index, bool enabled)
+{
+    egc_device_priv_t *priv = get_priv(device);
+    if (index >= device->desc->num_accelerometers) {
+        return -EINVAL;
+    }
+    return priv->driver->enable_accelerometer
+               ? priv->driver->enable_accelerometer(device, index, enabled)
+               : -1;
+}
+
+int egc_input_device_enable_gyroscope(egc_input_device_t *device, int index, bool enabled)
+{
+    egc_device_priv_t *priv = get_priv(device);
+    if (index >= device->desc->num_gyroscopes) {
+        return -EINVAL;
+    }
+    return priv->driver->enable_gyroscope ? priv->driver->enable_gyroscope(device, index, enabled)
+                                          : -1;
+}
+
+int egc_input_device_enable_touch_point(egc_input_device_t *device, int index, bool enabled)
+{
+    egc_device_priv_t *priv = get_priv(device);
+    if (index >= device->desc->num_touch_points) {
+        return -EINVAL;
+    }
+    return priv->driver->enable_touch_points
+               ? priv->driver->enable_touch_points(device, index, enabled)
+               : -1;
+}
+
+void egc_input_device_enable_accelerometer_default(bool enabled)
+{
+    _egc_enable_accelerometer_default = enabled;
+}
+
+void egc_input_device_enable_gyroscope_default(bool enabled)
+{
+    _egc_enable_gyroscope_default = enabled;
+}
+
+void egc_input_device_enable_touch_point_default(bool enabled)
+{
+    _egc_enable_touch_point_default = enabled;
 }
 
 int egc_input_device_set_suspended(egc_input_device_t *device, bool suspended)
