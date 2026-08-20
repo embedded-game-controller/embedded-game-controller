@@ -16,6 +16,9 @@ struct egc_device_driver_t {
     bool (*timer)(egc_input_device_t *device);
     void (*intr_event)(egc_input_device_t *device, const void *data, u16 length);
     void (*ctrl_event)(egc_input_device_t *device, const void *data, u16 length);
+    int (*enable_accelerometer)(egc_input_device_t *device, int index, bool enabled);
+    int (*enable_gyroscope)(egc_input_device_t *device, int index, bool enabled);
+    int (*enable_touch_points)(egc_input_device_t *device, int index, bool enabled);
 };
 
 typedef struct {
@@ -177,6 +180,10 @@ static inline void egc_device_driver_set_touch_point(egc_input_device_t *device,
                         sizeof(egc_gyroscope_t) * device->desc->num_gyroscopes);
     points[index] = point;
 }
+
+extern bool _egc_enable_accelerometer_default;
+extern bool _egc_enable_gyroscope_default;
+extern bool _egc_enable_touch_point_default;
 
 extern const egc_device_driver_t ds3_usb_device_driver;
 extern const egc_device_driver_t ds4_usb_device_driver;

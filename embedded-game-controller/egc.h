@@ -222,6 +222,21 @@ static inline egc_point_t egc_input_device_read_touch_point(egc_input_device_t *
     return points[index];
 }
 
+/* Functions to enable/disable sensor features. The initial status of these
+ * features is enabled; use the
+ *
+ *   egc_input_device_enable_<feature>_default()
+ *
+ * functions to change the default behaviour.
+ */
+int egc_input_device_enable_accelerometer(egc_input_device_t *device, int index, bool enabled);
+int egc_input_device_enable_gyroscope(egc_input_device_t *device, int index, bool enabled);
+int egc_input_device_enable_touch_point(egc_input_device_t *device, int index, bool enabled);
+
+void egc_input_device_enable_accelerometer_default(bool enabled);
+void egc_input_device_enable_gyroscope_default(bool enabled);
+void egc_input_device_enable_touch_point_default(bool enabled);
+
 /* Note: suspending might not be supported by all backends */
 int egc_input_device_set_suspended(egc_input_device_t *device, bool suspended);
 
