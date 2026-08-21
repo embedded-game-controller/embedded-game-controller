@@ -1025,47 +1025,52 @@ static bool wm_expansion_identify(egc_input_device_t *device, const u8 *data)
     struct wm_private_data_t *priv = PRIV(device);
     u16 id_minor = be16toh(*(u16 *)(data + 4));
     u16 id_major = be16toh(*(u16 *)(data));
-    u32 full_id = (id_major << 16) | id_minor;
-    switch (full_id) {
-    case 0x00000000:
-    case 0x00000505:
+    switch (id_minor) {
+    case 0x0000:
+    case 0x0505:
         priv->exp_type = EGC_WIIMOTE_EXP_NUNCHUCK;
         break;
-    case 0x00000005:
+    case 0x0005:
         priv->exp_type = EGC_WIIMOTE_EXP_NONE;
         break;
-    case 0x00000405:
+    case 0x0405:
         priv->exp_type = EGC_WIIMOTE_EXP_MOTION_PLUS;
         break;
-    case 0x00000705:
-    case 0x00000101:
-        priv->exp_type = EGC_WIIMOTE_EXP_CLASSIC;
+    case 0x0705:
+    case 0x0101:
+        switch (id_major) {
+        case 0x0100:
+            priv->exp_type = EGC_WIIMOTE_EXP_CLASSIC_PRO;
+            break;
+        default:
+            priv->exp_type = EGC_WIIMOTE_EXP_CLASSIC;
+        }
         break;
-    case 0x01000101:
-        priv->exp_type = EGC_WIIMOTE_EXP_CLASSIC_PRO;
-        break;
-    case 0xff000013:
+    case 0x0013:
         priv->exp_type = EGC_WIIMOTE_EXP_DRAWSOME_TABLET;
         break;
-    case 0x00000103:
-        priv->exp_type = EGC_WIIMOTE_EXP_GUITAR_HERO_3;
+    case 0x0103:
+        switch (id_major) {
+        case 0x0100:
+            priv->exp_type = EGC_WIIMOTE_EXP_GUITAR_HERO_DRUMS;
+            break;
+        case 0x0300:
+            priv->exp_type = EGC_WIIMOTE_EXP_DJ_HERO;
+            break;
+        default:
+            priv->exp_type = EGC_WIIMOTE_EXP_GUITAR_HERO_3;
+        }
         break;
-    case 0x01000103:
-        priv->exp_type = EGC_WIIMOTE_EXP_GUITAR_HERO_DRUMS;
-        break;
-    case 0x03000103:
-        priv->exp_type = EGC_WIIMOTE_EXP_DJ_HERO;
-        break;
-    case 0x00000111:
+    case 0x0111:
         priv->exp_type = EGC_WIIMOTE_EXP_TAIKO_DRUM;
         break;
-    case 0xff000112:
+    case 0x0112:
         priv->exp_type = EGC_WIIMOTE_EXP_UDRAW_TABLET;
         break;
-    case 0x00000310:
+    case 0x0310:
         priv->exp_type = EGC_WIIMOTE_EXP_SHINKANSEN;
         break;
-    case 0x00000402:
+    case 0x0402:
         priv->exp_type = EGC_WIIMOTE_EXP_BALANCE_BOARD;
         break;
     default:
