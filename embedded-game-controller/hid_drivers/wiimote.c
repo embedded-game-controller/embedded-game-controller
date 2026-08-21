@@ -8,6 +8,7 @@
 
 #define WM_VID_NINTENDO 0x057e
 #define WM_PID_WIIMOTE  0x0306
+#define WM_PID_WIIU_PRO 0x0330
 
 #define WM_CMD_SET_LEDS        0x11
 #define WM_CMD_SET_REPORT_TYPE 0x12
@@ -131,6 +132,18 @@ static const u8 s_elements_classic_btn[] = {
     /* clang-format on */
 };
 
+static const u8 s_elements_classic_wiiu_btn[] = {
+    /* clang-format off */
+    EGC_INPUT_REPORT_TYPE_SKIP, 4,
+    EGC_INPUT_REPORT_TYPE_BUTTON4_INVERTED,
+        EGC_GAMEPAD_BUTTON_INVALID,
+        EGC_GAMEPAD_BUTTON_INVALID,
+        EGC_GAMEPAD_BUTTON_LEFT_STICK,
+        EGC_GAMEPAD_BUTTON_RIGHT_STICK,
+    EGC_INPUT_REPORT_TYPE_END
+    /* clang-format on */
+};
+
 typedef enum ATTRIBUTE_PACKED {
     WM_STATE_IDLE = 0,
 
@@ -197,6 +210,12 @@ struct wm_calibration_axis_t {
     u8 min;
     u8 center;
 } ATTRIBUTE_PACKED;
+
+struct wm_calibration_axis16_t {
+    u16 max;
+    u16 min;
+    u16 center;
+};
 
 struct wm_private_data_t {
     WmState state;
@@ -473,6 +492,22 @@ static s16 wm_axis_value(u8 raw, const struct wm_calibration_axis_t *cal)
     return val;
 }
 
+static s16 wm_axis16_value(const u8 *data, const struct wm_calibration_axis16_t *cal)
+{
+    u16 raw = (data[1] << 8) | data[0];
+    int val;
+    if (raw > cal->center) {
+        val = (raw - cal->center) * INT16_MAX / (cal->max - cal->center);
+        if (val > INT16_MAX)
+            val = INT16_MAX;
+    } else {
+        val = (cal->center - raw) * INT16_MIN / (cal->center - cal->min);
+        if (val < INT16_MIN)
+            val = INT16_MIN;
+    }
+    return val;
+}
+
 static inline s16 wm_accel_value(s16 raw, const struct wm_calibration_accel_t *cal, int index)
 {
     return (raw - cal->zero[index]) * EGC_ACCELEROMETER_RES_PER_G /
@@ -500,6 +535,9 @@ static void wm_parse_buttons(const u8 *data, egc_input_state_t *state)
 static void wm_parse_accel(egc_input_device_t *device, const u8 *data,
                            const struct wm_calibration_accel_t *cal, egc_input_state_t *state)
 {
+    if (device->desc->num_accelerometers == 0)
+        return;
+
     s16 x = (data[2] << 2) | ((data[0] >> 5) & 0x3);
     s16 y = (data[3] << 2) | ((data[1] >> 4) & 0x2);
     s16 z = (data[4] << 2) | ((data[1] >> 5) & 0x2);
@@ -911,6 +949,25 @@ static void wm_parse_exp(egc_input_device_t *device, const u8 *data, egc_input_s
         egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_RIGHT_TRIGGER, value);
 
         egc_device_driver_parse_report(data + 4, s_elements_classic_btn, state);
+    } else if (priv->exp_type == EGC_WIIMOTE_EXP_CLASSIC_WIIU_PRO) {
+        struct wm_calibration_axis16_t cal = {
+            .max = 0x0c50,
+            .min = 0x0360,
+            .center = 0x07ff,
+        };
+        s16 value = wm_axis16_value(data, &cal);
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTX, value);
+        value = wm_axis16_value(data + 2, &cal);
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_RIGHTX, value);
+        value = wm_axis16_value(data + 4, &cal);
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTY, -1 - value);
+        value = wm_axis16_value(data + 6, &cal);
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_RIGHTY, -1 - value);
+
+        /* Same buttons as the classic controller */
+        egc_device_driver_parse_report(data + 8, s_elements_classic_btn, state);
+        /* And one more byte */
+        egc_device_driver_parse_report(data + 10, s_elements_classic_wiiu_btn, state);
     } else if (priv->exp_type == EGC_WIIMOTE_EXP_MOTION_PLUS) {
         bool exp_connected = data[4] & 0x01;
         if (exp_connected && priv->state == WM_STATE_IDLE) {
@@ -1046,6 +1103,9 @@ static bool wm_expansion_identify(egc_input_device_t *device, const u8 *data)
             priv->exp_type = EGC_WIIMOTE_EXP_CLASSIC;
         }
         break;
+    case 0x0120:
+        priv->exp_type = EGC_WIIMOTE_EXP_CLASSIC_WIIU_PRO;
+        break;
     case 0x0013:
         priv->exp_type = EGC_WIIMOTE_EXP_DRAWSOME_TABLET;
         break;
@@ -1116,7 +1176,9 @@ static void wm_compute_report_type(egc_input_device_t *device)
         report_type = WM_REP_BTN_ACC_EXP;
         priv->accel_enabled = true;
     } else {
-        report_type = WM_REP_BTN_EXP8;
+        /* So far only the Wii U Pro controller uses more than 8 bytes */
+        report_type =
+            priv->exp_type == EGC_WIIMOTE_EXP_CLASSIC_WIIU_PRO ? WM_REP_BTN_EXP : WM_REP_BTN_EXP8;
         priv->accel_enabled = false;
     }
     EGC_DEBUG("Setting report type to %02x", report_type);
@@ -1311,9 +1373,14 @@ static void wm_status_cb(egc_input_device_t *device, const u8 *data)
     priv->report_type_requested = false;
 
     u8 status = data[2];
-    priv->leds = status >> 4;
     bool battery_critical = status & WM_STATUS_BATTERY_CRITICAL;
     egc_device_driver_set_battery_critical(device, battery_critical);
+
+    /* The Wii U Pro controller reports the leds to be 0x1 as soon as it
+     * connects, even though the leds are still all blinking. Therefore, ignore
+     * the status reported here and always issue a led request.
+     *   priv->leds = status >> 4;
+     */
     priv->exp_attached = status & WM_STATUS_EXP_ATTACHED;
     priv->ir_enabled = status & WM_STATUS_IR_ENABLED;
 
@@ -1455,6 +1522,7 @@ static void wm_driver_ops_intr_event(egc_input_device_t *device, const void *dat
         wm_parse_accel(device, report, &priv->cal, &state);
         wm_parse_buttons(report, &state);
         break;
+    case WM_REP_BTN_EXP:
     case WM_REP_BTN_EXP8:
         if (length < WM_REP_BTN_EXP8_LEN)
             return;
@@ -1497,7 +1565,8 @@ static void wm_driver_ops_intr_event(egc_input_device_t *device, const void *dat
 static bool wm_driver_ops_probe(u16 vid, u16 pid)
 {
     static const egc_device_id_t compatible[] = {
-        { WM_VID_NINTENDO, WM_PID_WIIMOTE },
+        { WM_VID_NINTENDO,  WM_PID_WIIMOTE },
+        { WM_VID_NINTENDO, WM_PID_WIIU_PRO },
     };
 
     return egc_device_driver_is_compatible(vid, pid, compatible, ARRAY_SIZE(compatible));
@@ -1510,7 +1579,6 @@ static int wm_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
     priv->held_sideways = s_sideways_default;
     priv->motion_plus_requested = _egc_enable_gyroscope_default;
     priv->accel_requested = _egc_enable_accelerometer_default;
-    wm_enable_ir(device, _egc_enable_touch_point_default);
     priv->cal.zero[0] = priv->cal.zero[1] = priv->cal.zero[2] = 0x200;
     priv->cal.g_force[0] = priv->cal.g_force[1] = priv->cal.g_force[2] = 108;
 
@@ -1521,6 +1589,34 @@ static int wm_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
 
     egc_device_driver_set_endpoints(device, EGC_USB_ENDPOINT_IN | 1, 5, EGC_USB_ENDPOINT_OUT, 5);
 
+    if (pid == WM_PID_WIIU_PRO) {
+        desc->product_id = pid;
+        desc->num_touch_points = 0;
+        desc->num_gyroscopes = 0;
+        desc->num_accelerometers = 0;
+        /* clang-format off */
+        desc->available_buttons |=
+            BIT(EGC_GAMEPAD_BUTTON_LEFT_SHOULDER) |
+            BIT(EGC_GAMEPAD_BUTTON_RIGHT_SHOULDER) |
+            BIT(EGC_GAMEPAD_BUTTON_LEFT_STICK) |
+            BIT(EGC_GAMEPAD_BUTTON_RIGHT_STICK);
+        desc->available_axes |=
+            BIT(EGC_GAMEPAD_AXIS_LEFT_TRIGGER) | BIT(EGC_GAMEPAD_AXIS_RIGHT_TRIGGER) |
+            BIT(EGC_GAMEPAD_AXIS_LEFTX) | BIT(EGC_GAMEPAD_AXIS_LEFTY) |
+            BIT(EGC_GAMEPAD_AXIS_RIGHTX) | BIT(EGC_GAMEPAD_AXIS_RIGHTY);
+        /* clang-format on */
+        priv->held_sideways = false;
+        priv->ir_requested = false;
+        priv->accel_requested = false;
+        /* https://wiiubrew.org/wiki/Pro_Controller says that reading from the
+         * EEPROM causes the controller to disconnect. We use hardcoded values
+         * from the logs provided by niuus here
+         * (https://gbatemp.net/threads/testers-wanted-btembedded-a-new-bluetooth-stack.680306/page-2#post-10900449)
+         */
+        priv->calibrated = true;
+    } else {
+        wm_enable_ir(device, _egc_enable_touch_point_default);
+    }
     wm_request_status(device);
     /* Set a half-second timer to let the device stabilize before requesting
      * updates */
