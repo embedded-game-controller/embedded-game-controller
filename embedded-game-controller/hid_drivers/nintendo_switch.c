@@ -483,6 +483,8 @@ static bool parse_input_report(egc_input_device_t *device, const ns_input_report
         EGC_WARN("report ID: %02x", report->id);
         return false;
     }
+    u8 battery_level = report->bat_con >> 4;
+    egc_device_driver_set_battery_critical(device, battery_level <= 2);
     s16 axes[2];
     u32 buttons = ns_get_buttons(report->button_status);
     egc_accelerometer_t *accel = egc_device_driver_get_accelerometer(device, state, 0);

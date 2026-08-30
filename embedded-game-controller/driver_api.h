@@ -181,6 +181,11 @@ static inline void egc_device_driver_set_touch_point(egc_input_device_t *device,
     points[index] = point;
 }
 
+static inline void egc_device_driver_set_battery_critical(egc_input_device_t *device, bool critical)
+{
+    device->battery_critical = critical;
+}
+
 extern bool _egc_enable_accelerometer_default;
 extern bool _egc_enable_gyroscope_default;
 extern bool _egc_enable_touch_point_default;
