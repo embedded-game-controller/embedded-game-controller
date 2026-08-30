@@ -345,7 +345,7 @@ static int update_device_list(void)
     usb_device_entry devlist[USB_MAX_DEVICES];
     u8 count = 0;
     USB_GetDeviceList(devlist, USB_MAX_DEVICES, USB_CLASS_HID, &count);
-    printf("Found %d USB device(s)\n", count);
+    EGC_DEBUG("Found %d USB device(s)", count);
 
     /* First look for disconnections */
     for (int i = 0; i < ARRAY_SIZE(s_devices); i++) {
