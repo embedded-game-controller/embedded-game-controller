@@ -1307,9 +1307,8 @@ static void wm_status_cb(egc_input_device_t *device, const u8 *data)
 
     u8 status = data[2];
     priv->leds = status >> 4;
-    /* No use for this at the moment:
-    priv->battery_critical = status & WM_STATUS_BATTERY_CRITICAL;
-    */
+    bool battery_critical = status & WM_STATUS_BATTERY_CRITICAL;
+    egc_device_driver_set_battery_critical(device, battery_critical);
     priv->exp_attached = status & WM_STATUS_EXP_ATTACHED;
     priv->ir_enabled = status & WM_STATUS_IR_ENABLED;
 
