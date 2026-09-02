@@ -56,6 +56,7 @@
 #define WM_IR_MODE_FULL     5
 
 /* Register addresses */
+#define WM_REG_EXP_START       0x04a40000
 #define WM_REG_EXP_CALIBRATION 0x04a40020
 #define WM_REG_EXP_DECRYPT1    0x04a400f0
 #define WM_REG_EXP_DECRYPT2    0x04a400fb
@@ -244,28 +245,38 @@ struct wm_private_data_t {
 
     EgcWiimoteExpType exp_type : 4;
     u8 remaining_attempts : 4;
-    /* The highest bit of x tell whether the point is valid; the next 2
-     * bits hold the index where the point was found */
-    egc_point_t ir_points_prev[2];
-    s16 ir_bar_width_prev;
-    struct wm_calibration_accel_t cal ATTRIBUTE_ALIGN(2);
     union {
-        struct wm_exp_cal_motion_plus_t {
-            struct wm_calibration_gyro_t gyro;
-        } motion_plus;
-        struct wm_exp_cal_nunchuck_t {
-            struct wm_calibration_accel_t accel;
-            struct wm_calibration_axis_t stick_x;
-            struct wm_calibration_axis_t stick_y;
-        } nunchuck;
-        struct wm_exp_cal_classic_t {
-            struct wm_calibration_axis_t l_stick_x;
-            struct wm_calibration_axis_t l_stick_y;
-            struct wm_calibration_axis_t r_stick_x;
-            struct wm_calibration_axis_t r_stick_y;
-        } classic;
-    } exp_cal;
-} ATTRIBUTE_PACKED;
+        struct {
+            /* The highest bit of x tell whether the point is valid; the next 2
+             * bits hold the index where the point was found */
+            egc_point_t ir_points_prev[2];
+            s16 ir_bar_width_prev;
+            struct wm_calibration_accel_t cal ATTRIBUTE_ALIGN(2);
+            union {
+                struct wm_exp_cal_motion_plus_t {
+                    struct wm_calibration_gyro_t gyro;
+                } motion_plus;
+                struct wm_exp_cal_nunchuck_t {
+                    struct wm_calibration_accel_t accel ATTRIBUTE_ALIGN(2);
+                    struct wm_calibration_axis_t stick_x;
+                    struct wm_calibration_axis_t stick_y;
+                } nunchuck;
+                struct wm_exp_cal_classic_t {
+                    struct wm_calibration_axis_t l_stick_x;
+                    struct wm_calibration_axis_t l_stick_y;
+                    struct wm_calibration_axis_t r_stick_x;
+                    struct wm_calibration_axis_t r_stick_y;
+                } classic;
+            } exp_cal;
+        } wiimote;
+        struct wm_wiiupro_cal_t {
+            struct wm_calibration_axis16_t l_stick_x;
+            struct wm_calibration_axis16_t l_stick_y;
+            struct wm_calibration_axis16_t r_stick_x;
+            struct wm_calibration_axis16_t r_stick_y;
+        } wiiupro;
+    };
+};
 static_assert(sizeof(struct wm_private_data_t) <= EGC_INPUT_DEVICE_DRIVER_DATA_SIZE);
 #define PRIV(input_device) ((struct wm_private_data_t *)get_priv(input_device)->private_data)
 
@@ -492,18 +503,22 @@ static s16 wm_axis_value(u8 raw, const struct wm_calibration_axis_t *cal)
     return val;
 }
 
-static s16 wm_axis16_value(const u8 *data, const struct wm_calibration_axis16_t *cal)
+static s16 wm_axis16_value(const u8 *data, struct wm_calibration_axis16_t *cal)
 {
     u16 raw = (data[1] << 8) | data[0];
     int val;
     if (raw > cal->center) {
         val = (raw - cal->center) * INT16_MAX / (cal->max - cal->center);
-        if (val > INT16_MAX)
+        if (val > INT16_MAX) {
             val = INT16_MAX;
+            cal->max = raw;
+        }
     } else {
         val = (cal->center - raw) * INT16_MIN / (cal->center - cal->min);
-        if (val < INT16_MIN)
+        if (val < INT16_MIN) {
             val = INT16_MIN;
+            cal->min = raw;
+        }
     }
     return val;
 }
@@ -579,7 +594,7 @@ static int wm_ir_find_bar(egc_input_device_t *device, const egc_point_t *points,
     int points_prev_camera_index[2];
     egc_point_t points_prev[2];
     for (int i = 0; i < 2; i++) {
-        egc_point_t p = priv->ir_points_prev[i];
+        egc_point_t p = priv->wiimote.ir_points_prev[i];
         if (p.x & 0x8000) {
             points_prev[i].x = p.x & 0x3ff;
             points_prev[i].y = p.y;
@@ -694,13 +709,13 @@ static int wm_ir_find_bar(egc_input_device_t *device, const egc_point_t *points,
         int hidden_point_index = (prev_valid_point_index + 1) % 2;
         bar_points[prev_valid_point_index] = point;
         int valid_camera_index = points_prev_camera_index[prev_valid_point_index];
-        priv->ir_points_prev[prev_valid_point_index].x =
+        priv->wiimote.ir_points_prev[prev_valid_point_index].x =
             0x8000 | valid_camera_index << 13 | point.x;
-        priv->ir_points_prev[prev_valid_point_index].y = point.y;
-        priv->ir_points_prev[hidden_point_index].x = 0;
+        priv->wiimote.ir_points_prev[prev_valid_point_index].y = point.y;
+        priv->wiimote.ir_points_prev[hidden_point_index].x = 0;
         /* Compute the position of the hidden point */
-        int dx = cosf(wiimote_roll) * priv->ir_bar_width_prev;
-        int dy = sinf(wiimote_roll) * priv->ir_bar_width_prev;
+        int dx = cosf(wiimote_roll) * priv->wiimote.ir_bar_width_prev;
+        int dy = sinf(wiimote_roll) * priv->wiimote.ir_bar_width_prev;
         if (hidden_point_index == 0) {
             dx = -dx;
             dy = -dy;
@@ -709,7 +724,7 @@ static int wm_ir_find_bar(egc_input_device_t *device, const egc_point_t *points,
         bar_points[hidden_point_index].y = point.y + dy;
 
         *ir_roll = wiimote_roll;
-        *bar_width = priv->ir_bar_width_prev;
+        *bar_width = priv->wiimote.ir_bar_width_prev;
         return 1;
     }
 
@@ -718,7 +733,7 @@ done:
         egc_point_t p = points[new_camera_index[i]];
 
         /* If the old points are available, apply some smoothing */
-        egc_point_t old_p = priv->ir_points_prev[i];
+        egc_point_t old_p = priv->wiimote.ir_points_prev[i];
         if (old_p.x & 0x8000) {
             old_p.x &= 0x3ff;
 
@@ -729,18 +744,18 @@ done:
         bar_points[i] = p;
 
         /* Also save them in the private structure for the next iteration */
-        priv->ir_points_prev[i].x = 0x8000 | new_camera_index[i] << 13 | p.x;
-        priv->ir_points_prev[i].y = p.y;
+        priv->wiimote.ir_points_prev[i].x = 0x8000 | new_camera_index[i] << 13 | p.x;
+        priv->wiimote.ir_points_prev[i].y = p.y;
     }
     *ir_roll = isnan(new_roll) ? compute_angle(bar_points[0], bar_points[1], &new_width_squared)
                                : new_roll;
     *bar_width = sqrtf(new_width_squared);
-    priv->ir_bar_width_prev = *bar_width;
+    priv->wiimote.ir_bar_width_prev = *bar_width;
     return 2;
 
 not_found:
     /* Clear the previous points */
-    priv->ir_points_prev[0].x = priv->ir_points_prev[1].x = 0;
+    priv->wiimote.ir_points_prev[0].x = priv->wiimote.ir_points_prev[1].x = 0;
     return 0;
 }
 
@@ -772,9 +787,9 @@ static void wm_ir_resolve(egc_input_device_t *device, egc_point_t *points, egc_i
         bar_points[0] = bar_points[1];
         bar_points[1] = tmp;
 
-        tmp = priv->ir_points_prev[0];
-        priv->ir_points_prev[0] = priv->ir_points_prev[1];
-        priv->ir_points_prev[1] = tmp;
+        tmp = priv->wiimote.ir_points_prev[0];
+        priv->wiimote.ir_points_prev[0] = priv->wiimote.ir_points_prev[1];
+        priv->wiimote.ir_points_prev[1] = tmp;
     }
     /* Rotate the first point around the camera center */
     const int camera_width = 0x3ff;
@@ -863,8 +878,12 @@ static int wm_expansion_step(egc_input_device_t *device)
                priv->state == WM_STATE_EXP_CHECK_ENCRYPTED) {
         rc = wm_read_data(device, WM_REG_EXP_TYPE, 6);
     } else if (priv->state == WM_STATE_EXP_READ_CALIBRATION) {
-        u32 offset = ((priv->remaining_attempts / 2) % 2 == 0) ? 0 : WM_REG_EXP_CALIBRATION_LEN;
-        rc = wm_read_data(device, WM_REG_EXP_CALIBRATION + offset, 16);
+        if (device->desc->product_id == WM_PID_WIIU_PRO) {
+            rc = wm_read_data(device, WM_REG_EXP_START, 8);
+        } else { /* Wiimote */
+            u32 offset = ((priv->remaining_attempts / 2) % 2 == 0) ? 0 : WM_REG_EXP_CALIBRATION_LEN;
+            rc = wm_read_data(device, WM_REG_EXP_CALIBRATION + offset, 16);
+        }
     }
 
     return rc;
@@ -914,31 +933,33 @@ static void wm_parse_exp(egc_input_device_t *device, const u8 *data, egc_input_s
             egc_device_driver_set_button(state, EGC_GAMEPAD_BUTTON_LEFT_SHOULDER);
         }
 
-        s16 value = wm_axis_value(data[0], &priv->exp_cal.nunchuck.stick_x);
+        struct wm_exp_cal_nunchuck_t *cal = &priv->wiimote.exp_cal.nunchuck;
+        s16 value = wm_axis_value(data[0], &cal->stick_x);
         egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTX, value);
 
-        value = wm_axis_value(data[1], &priv->exp_cal.nunchuck.stick_y);
+        value = wm_axis_value(data[1], &cal->stick_y);
         egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTY, -1 - value);
 
         egc_accelerometer_t *accel = egc_device_driver_get_accelerometer(device, state, 1);
         s16 x = (data[2] << 2) | ((data[5] >> 2) & 0x3);
         s16 y = (data[3] << 2) | ((data[5] >> 4) & 0x3);
         s16 z = (data[4] << 2) | ((data[5] >> 6) & 0x3);
-        struct wm_calibration_accel_t *ac = &priv->exp_cal.nunchuck.accel;
+        struct wm_calibration_accel_t *ac = &cal->accel;
         accel->x = wm_accel_value(x, ac, 0);
         accel->y = wm_accel_value(z, ac, 2);
         accel->z = -wm_accel_value(y, ac, 1);
     } else if (priv->exp_type == EGC_WIIMOTE_EXP_CLASSIC ||
                priv->exp_type == EGC_WIIMOTE_EXP_CLASSIC_PRO) {
-        s16 value = wm_axis_value(data[0] & 0x3f, &priv->exp_cal.classic.l_stick_x);
+        struct wm_exp_cal_classic_t *cal = &priv->wiimote.exp_cal.classic;
+        s16 value = wm_axis_value(data[0] & 0x3f, &cal->l_stick_x);
         egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTX, value);
-        value = wm_axis_value(data[1] & 0x3f, &priv->exp_cal.classic.l_stick_y);
+        value = wm_axis_value(data[1] & 0x3f, &cal->l_stick_y);
         egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTY, -1 - value);
 
         value = ((data[0] >> 3) & 0x18) | ((data[1] >> 5) & 0x6) | (data[2] >> 7);
-        value = wm_axis_value(value, &priv->exp_cal.classic.r_stick_x);
+        value = wm_axis_value(value, &cal->r_stick_x);
         egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_RIGHTX, value);
-        value = wm_axis_value(data[2] & 0x1f, &priv->exp_cal.classic.r_stick_y);
+        value = wm_axis_value(data[2] & 0x1f, &cal->r_stick_y);
         egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_RIGHTY, -1 - value);
 
         value = ((data[2] >> 2) & 0x18) | ((data[3] >> 5) & 0x7);
@@ -950,18 +971,14 @@ static void wm_parse_exp(egc_input_device_t *device, const u8 *data, egc_input_s
 
         egc_device_driver_parse_report(data + 4, s_elements_classic_btn, state);
     } else if (priv->exp_type == EGC_WIIMOTE_EXP_CLASSIC_WIIU_PRO) {
-        struct wm_calibration_axis16_t cal = {
-            .max = 0x0c50,
-            .min = 0x0360,
-            .center = 0x07ff,
-        };
-        s16 value = wm_axis16_value(data, &cal);
+        struct wm_wiiupro_cal_t *cal = &priv->wiiupro;
+        s16 value = wm_axis16_value(data, &cal->l_stick_x);
         egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTX, value);
-        value = wm_axis16_value(data + 2, &cal);
+        value = wm_axis16_value(data + 2, &cal->r_stick_x);
         egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_RIGHTX, value);
-        value = wm_axis16_value(data + 4, &cal);
+        value = wm_axis16_value(data + 4, &cal->l_stick_y);
         egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTY, -1 - value);
-        value = wm_axis16_value(data + 6, &cal);
+        value = wm_axis16_value(data + 6, &cal->r_stick_y);
         egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_RIGHTY, -1 - value);
 
         /* Same buttons as the classic controller */
@@ -991,6 +1008,14 @@ static void wm_parse_exp(egc_input_device_t *device, const u8 *data, egc_input_s
     }
 }
 
+static inline void wm_calibration_axis16_from_center(struct wm_calibration_axis16_t *cal,
+                                                     u16 center)
+{
+    cal->center = center;
+    cal->min = center > 1024 ? (center - 1024) : 0;
+    cal->max = center + 1024;
+}
+
 static bool wm_expansion_calibration_parse(egc_input_device_t *device, const u8 *data)
 {
     struct wm_private_data_t *priv = PRIV(device);
@@ -999,20 +1024,21 @@ static bool wm_expansion_calibration_parse(egc_input_device_t *device, const u8 
         if (!wm_checksum(data, 15)) {
             return false;
         }
-        wm_parse_3u16(data, priv->exp_cal.nunchuck.accel.zero);
-        wm_parse_3u16(data + 4, priv->exp_cal.nunchuck.accel.g_force);
-        priv->exp_cal.nunchuck.stick_x.max = data[8];
-        priv->exp_cal.nunchuck.stick_x.min = data[9];
-        priv->exp_cal.nunchuck.stick_x.center = data[10];
-        priv->exp_cal.nunchuck.stick_y.max = data[11];
-        priv->exp_cal.nunchuck.stick_y.min = data[12];
-        priv->exp_cal.nunchuck.stick_y.center = data[13];
+        struct wm_exp_cal_nunchuck_t *cal = &priv->wiimote.exp_cal.nunchuck;
+        wm_parse_3u16(data, cal->accel.zero);
+        wm_parse_3u16(data + 4, cal->accel.g_force);
+        cal->stick_x.max = data[8];
+        cal->stick_x.min = data[9];
+        cal->stick_x.center = data[10];
+        cal->stick_y.max = data[11];
+        cal->stick_y.min = data[12];
+        cal->stick_y.center = data[13];
     } else if (priv->exp_type == EGC_WIIMOTE_EXP_CLASSIC ||
                priv->exp_type == EGC_WIIMOTE_EXP_CLASSIC_PRO) {
         if (!wm_checksum(data, 15)) {
             return false;
         }
-        struct wm_exp_cal_classic_t *cal = &priv->exp_cal.classic;
+        struct wm_exp_cal_classic_t *cal = &priv->wiimote.exp_cal.classic;
         cal->l_stick_x.max = data[0] >> 2;
         cal->l_stick_x.min = data[1] >> 2;
         cal->l_stick_x.center = data[2] >> 2;
@@ -1025,6 +1051,14 @@ static bool wm_expansion_calibration_parse(egc_input_device_t *device, const u8 
         cal->r_stick_y.max = data[9] >> 3;
         cal->r_stick_y.min = data[10] >> 3;
         cal->r_stick_y.center = data[11] >> 3;
+    } else if (priv->exp_type == EGC_WIIMOTE_EXP_CLASSIC_WIIU_PRO) {
+        /* We have read 8 bytes from an input report. We expect these to be the
+         * neutral positions of the two sticks. */
+        struct wm_wiiupro_cal_t *cal = &priv->wiiupro;
+        wm_calibration_axis16_from_center(&cal->l_stick_x, le16toh(*(u16 *)data));
+        wm_calibration_axis16_from_center(&cal->r_stick_x, le16toh(*(u16 *)(data + 2)));
+        wm_calibration_axis16_from_center(&cal->l_stick_y, le16toh(*(u16 *)(data + 4)));
+        wm_calibration_axis16_from_center(&cal->r_stick_y, le16toh(*(u16 *)(data + 6)));
     } else if (priv->exp_type == EGC_WIIMOTE_EXP_MOTION_PLUS) {
         /* TODO: This data is garbage on my chinese replica */
     }
@@ -1039,7 +1073,7 @@ static void wm_expansion_setup(egc_input_device_t *device)
 
     /* Here we setup the default calibration and update the device description */
     if (priv->exp_type == EGC_WIIMOTE_EXP_NUNCHUCK) {
-        struct wm_exp_cal_nunchuck_t *cal = &priv->exp_cal.nunchuck;
+        struct wm_exp_cal_nunchuck_t *cal = &priv->wiimote.exp_cal.nunchuck;
         cal->accel.zero[0] = cal->accel.zero[1] = cal->accel.zero[2] = 512;
         cal->accel.g_force[0] = cal->accel.g_force[1] = cal->accel.g_force[2] = 716;
         cal->stick_x.max = 256 - 32;
@@ -1055,7 +1089,7 @@ static void wm_expansion_setup(egc_input_device_t *device)
         desc->num_accelerometers = 2;
     } else if (priv->exp_type == EGC_WIIMOTE_EXP_CLASSIC ||
                priv->exp_type == EGC_WIIMOTE_EXP_CLASSIC_PRO) {
-        struct wm_exp_cal_classic_t *cal = &priv->exp_cal.classic;
+        struct wm_exp_cal_classic_t *cal = &priv->wiimote.exp_cal.classic;
         cal->l_stick_x.min = cal->l_stick_y.min = 0;
         cal->l_stick_x.max = cal->l_stick_y.max = 63;
         cal->l_stick_x.center = cal->l_stick_y.center = 32;
@@ -1148,8 +1182,8 @@ static bool wm_calibration_parse(egc_input_device_t *device, const u8 *data)
         return false;
     }
 
-    wm_parse_3u16(data, priv->cal.zero);
-    wm_parse_3u16(data + 4, priv->cal.g_force);
+    wm_parse_3u16(data, priv->wiimote.cal.zero);
+    wm_parse_3u16(data + 4, priv->wiimote.cal.g_force);
     return true;
 }
 
@@ -1519,7 +1553,7 @@ static void wm_driver_ops_intr_event(egc_input_device_t *device, const void *dat
         if (length < WM_REP_BTN_ACC_EXP_LEN)
             return;
         wm_parse_exp(device, report + WM_REP_BTN_ACC_LEN, &state);
-        wm_parse_accel(device, report, &priv->cal, &state);
+        wm_parse_accel(device, report, &priv->wiimote.cal, &state);
         wm_parse_buttons(report, &state);
         break;
     case WM_REP_BTN_EXP:
@@ -1539,7 +1573,7 @@ static void wm_driver_ops_intr_event(egc_input_device_t *device, const void *dat
     case WM_REP_BTN_ACC:
         if (length < WM_REP_BTN_ACC_LEN)
             return;
-        wm_parse_accel(device, report, &priv->cal, &state);
+        wm_parse_accel(device, report, &priv->wiimote.cal, &state);
         // fallthrough
     case WM_REP_BTN:
         if (length < WM_REP_BTN_LEN)
@@ -1579,8 +1613,9 @@ static int wm_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
     priv->held_sideways = s_sideways_default;
     priv->motion_plus_requested = _egc_enable_gyroscope_default;
     priv->accel_requested = _egc_enable_accelerometer_default;
-    priv->cal.zero[0] = priv->cal.zero[1] = priv->cal.zero[2] = 0x200;
-    priv->cal.g_force[0] = priv->cal.g_force[1] = priv->cal.g_force[2] = 108;
+    struct wm_calibration_accel_t *cal = &priv->wiimote.cal;
+    cal->zero[0] = cal->zero[1] = cal->zero[2] = 0x200;
+    cal->g_force[0] = cal->g_force[1] = cal->g_force[2] = 108;
 
     priv->requested_leds = 1; /* otherwise they will blink forever */
     egc_device_description_t *desc = egc_device_driver_alloc_desc(device);
