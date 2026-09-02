@@ -511,17 +511,21 @@ static void wm_parse_3u16(const u8 *data, u16 *values)
     values[2] = (data[2] << 2) | ((data[3] >> 0) & 0x3);
 }
 
-static s16 wm_axis_value(u8 raw, const struct wm_calibration_axis_t *cal)
+static s16 wm_axis_value(u8 raw, struct wm_calibration_axis_t *cal)
 {
     int val;
     if (raw > cal->center) {
         val = (raw - cal->center) * INT16_MAX / (cal->max - cal->center);
-        if (val > INT16_MAX)
+        if (val > INT16_MAX) {
             val = INT16_MAX;
+            cal->max = raw;
+        }
     } else {
         val = (cal->center - raw) * INT16_MIN / (cal->center - cal->min);
-        if (val < INT16_MIN)
+        if (val < INT16_MIN) {
             val = INT16_MIN;
+            cal->min = raw;
+        }
     }
     return val;
 }
@@ -953,10 +957,21 @@ static void wm_parse_exp(egc_input_device_t *device, const u8 *data, egc_input_s
         }
 
         struct wm_exp_cal_nunchuck_t *cal = &priv->wiimote.exp_cal.nunchuck;
-        s16 value = wm_axis_value(data[0], &cal->stick_x);
+        u8 stick_x = data[0];
+        u8 stick_y = data[1];
+        if (cal->stick_x.min == 255) {
+            /* Still not calibrated: use the current reading as center value */
+            cal->stick_x.center = stick_x;
+            cal->stick_x.min = cal->stick_x.center - 64;
+            cal->stick_x.max = cal->stick_x.center + 64;
+            cal->stick_y.center = stick_y;
+            cal->stick_y.min = cal->stick_y.center - 64;
+            cal->stick_y.max = cal->stick_y.center + 64;
+        }
+        s16 value = wm_axis_value(stick_x, &cal->stick_x);
         egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTX, value);
 
-        value = wm_axis_value(data[1], &cal->stick_y);
+        value = wm_axis_value(stick_y, &cal->stick_y);
         egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTY, -1 - value);
 
         egc_accelerometer_t *accel = egc_device_driver_get_accelerometer(device, state, 1);
@@ -970,15 +985,34 @@ static void wm_parse_exp(egc_input_device_t *device, const u8 *data, egc_input_s
     } else if (priv->exp_type == EGC_WIIMOTE_EXP_CLASSIC ||
                priv->exp_type == EGC_WIIMOTE_EXP_CLASSIC_PRO) {
         struct wm_exp_cal_classic_t *cal = &priv->wiimote.exp_cal.classic;
-        s16 value = wm_axis_value(data[0] & 0x3f, &cal->l_stick_x);
+        u8 l_stick_x = data[0] & 0x3f;
+        u8 l_stick_y = data[1] & 0x3f;
+        u8 r_stick_x = ((data[0] >> 3) & 0x18) | ((data[1] >> 5) & 0x6) | (data[2] >> 7);
+        u8 r_stick_y = data[2] & 0x1f;
+
+        if (cal->l_stick_x.min == 255) {
+            /* Still not calibrated: use the current reading as center value */
+            cal->l_stick_x.center = l_stick_x;
+            cal->l_stick_x.min = cal->l_stick_x.center - 16;
+            cal->l_stick_x.max = cal->l_stick_x.center + 16;
+            cal->l_stick_y.center = l_stick_y;
+            cal->l_stick_y.min = cal->l_stick_y.center - 16;
+            cal->l_stick_y.max = cal->l_stick_y.center + 16;
+            cal->r_stick_x.center = r_stick_x;
+            cal->r_stick_x.min = cal->r_stick_x.center - 8;
+            cal->r_stick_x.max = cal->r_stick_x.center + 8;
+            cal->r_stick_y.center = r_stick_y;
+            cal->r_stick_y.min = cal->r_stick_y.center - 8;
+            cal->r_stick_y.max = cal->r_stick_y.center + 8;
+        }
+        s16 value = wm_axis_value(l_stick_x, &cal->l_stick_x);
         egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTX, value);
-        value = wm_axis_value(data[1] & 0x3f, &cal->l_stick_y);
+        value = wm_axis_value(l_stick_y, &cal->l_stick_y);
         egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTY, -1 - value);
 
-        value = ((data[0] >> 3) & 0x18) | ((data[1] >> 5) & 0x6) | (data[2] >> 7);
-        value = wm_axis_value(value, &cal->r_stick_x);
+        value = wm_axis_value(r_stick_x, &cal->r_stick_x);
         egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_RIGHTX, value);
-        value = wm_axis_value(data[2] & 0x1f, &cal->r_stick_y);
+        value = wm_axis_value(r_stick_y, &cal->r_stick_y);
         egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_RIGHTY, -1 - value);
 
         value = ((data[2] >> 2) & 0x18) | ((data[3] >> 5) & 0x7);
@@ -1095,12 +1129,8 @@ static void wm_expansion_setup(egc_input_device_t *device)
         struct wm_exp_cal_nunchuck_t *cal = &priv->wiimote.exp_cal.nunchuck;
         cal->accel.zero[0] = cal->accel.zero[1] = cal->accel.zero[2] = 512;
         cal->accel.g_force[0] = cal->accel.g_force[1] = cal->accel.g_force[2] = 716;
-        cal->stick_x.max = 256 - 32;
-        cal->stick_x.min = 32;
-        cal->stick_x.center = 128;
-        cal->stick_y.max = 256 - 32;
-        cal->stick_y.min = 32;
-        cal->stick_y.center = 128;
+        /* We use the 255 value to mark the sticks as uncalibrated. */
+        cal->stick_x.min = 255;
 
         desc->available_buttons |= BIT(EGC_GAMEPAD_BUTTON_LEFT_SHOULDER);
         desc->available_axes |= BIT(EGC_GAMEPAD_AXIS_LEFT_TRIGGER) | BIT(EGC_GAMEPAD_AXIS_LEFTX) |
@@ -1109,12 +1139,8 @@ static void wm_expansion_setup(egc_input_device_t *device)
     } else if (priv->exp_type == EGC_WIIMOTE_EXP_CLASSIC ||
                priv->exp_type == EGC_WIIMOTE_EXP_CLASSIC_PRO) {
         struct wm_exp_cal_classic_t *cal = &priv->wiimote.exp_cal.classic;
-        cal->l_stick_x.min = cal->l_stick_y.min = 0;
-        cal->l_stick_x.max = cal->l_stick_y.max = 63;
-        cal->l_stick_x.center = cal->l_stick_y.center = 32;
-        cal->r_stick_x.min = cal->r_stick_y.min = 0;
-        cal->r_stick_x.max = cal->r_stick_y.max = 31;
-        cal->r_stick_x.center = cal->r_stick_y.center = 16;
+        /* We use the 255 value to mark the sticks as uncalibrated. */
+        cal->l_stick_x.min = 255;
 
         /* clang-format off */
         desc->available_buttons |=
