@@ -180,7 +180,10 @@ typedef enum ATTRIBUTE_PACKED {
     WM_STATE_MP_PROBE = WM_STATE_MP_FIRST,
     WM_STATE_MP_INITIALIZING,
     WM_STATE_MP_ENABLING,
-    WM_STATE_MP_LAST = WM_STATE_MP_ENABLING,
+    WM_STATE_MP_DISABLING1,
+    WM_STATE_MP_DISABLING2,
+    WM_STATE_MP_DISABLING_STATUS, /* Waiting for status */
+    WM_STATE_MP_LAST = WM_STATE_MP_DISABLING_STATUS,
     /* TODO: expose the Motion+ disable operation to the client? */
 
     /* Currently not used, since EGC does not support playing sounds yet */
@@ -448,6 +451,22 @@ static int wm_request_status(egc_input_device_t *device)
     return rc;
 }
 
+static int wm_expansion_decrypt1(egc_input_device_t *device)
+{
+    struct wm_private_data_t *priv = PRIV(device);
+    u8 value = 0x55;
+    int rc = wm_write_data(device, WM_REG_EXP_DECRYPT1, &value, sizeof(value));
+    /* This operation disables the Motion+ */
+    priv->motion_plus_enabled = false;
+    return rc;
+}
+
+static int wm_expansion_decrypt2(egc_input_device_t *device)
+{
+    u8 value = 0x0;
+    return wm_write_data(device, WM_REG_EXP_DECRYPT2, &value, sizeof(value));
+}
+
 static int wm_mp_step(egc_input_device_t *device)
 {
     struct wm_private_data_t *priv = PRIV(device);
@@ -459,13 +478,17 @@ static int wm_mp_step(egc_input_device_t *device)
         u8 value = 0x55;
         rc = wm_write_data(device, WM_REG_MP_INIT, &value, sizeof(value));
     } else if (priv->state == WM_STATE_MP_ENABLING) {
-        if (priv->motion_plus_requested) {
-            u8 value = 0x04;
-            rc = wm_write_data(device, WM_REG_MP_STATUS, &value, sizeof(value));
-        } else {
-            u8 value = 0x55;
-            rc = wm_write_data(device, WM_REG_EXP_DECRYPT1, &value, sizeof(value));
-        }
+        u8 value = 0x04;
+        rc = wm_write_data(device, WM_REG_MP_STATUS, &value, sizeof(value));
+    } else if (priv->state == WM_STATE_MP_DISABLING1) {
+        rc = wm_expansion_decrypt1(device);
+    } else if (priv->state == WM_STATE_MP_DISABLING2) {
+        rc = wm_expansion_decrypt2(device);
+    } else if (priv->state == WM_STATE_MP_DISABLING_STATUS) {
+        /* The wiibrew wiki claims that a status event should be spntaneously
+         * emitted by the wiimote, but that does not happen on my Chinese
+         * replica. So, let's request it explicitly to be safe. */
+        rc = wm_request_status(device);
     }
 
     return rc;
@@ -867,13 +890,9 @@ static int wm_expansion_step(egc_input_device_t *device)
     int rc = -1;
 
     if (priv->state == WM_STATE_EXP_DECRYPT_1) {
-        u8 value = 0x55;
-        rc = wm_write_data(device, WM_REG_EXP_DECRYPT1, &value, sizeof(value));
-        /* This operation disables the Motion+ */
-        priv->motion_plus_enabled = false;
+        rc = wm_expansion_decrypt1(device);
     } else if (priv->state == WM_STATE_EXP_DECRYPT_2) {
-        u8 value = 0x0;
-        rc = wm_write_data(device, WM_REG_EXP_DECRYPT2, &value, sizeof(value));
+        rc = wm_expansion_decrypt2(device);
     } else if (priv->state == WM_STATE_EXP_IDENTIFICATION ||
                priv->state == WM_STATE_EXP_CHECK_ENCRYPTED) {
         rc = wm_read_data(device, WM_REG_EXP_TYPE, 6);
@@ -991,7 +1010,7 @@ static void wm_parse_exp(egc_input_device_t *device, const u8 *data, egc_input_s
             /* Disable the Motion+ and enable the connected expansion.
              * In the future we might want a passthrough mode instead. */
             wm_expansion_remove(device);
-            priv->state = WM_STATE_EXP_DECRYPT_1;
+            priv->state = WM_STATE_MP_DISABLING1;
             wm_step(device);
         }
 
@@ -1251,16 +1270,20 @@ static int wm_step(egc_input_device_t *device)
                     wm_expansion_remove(device);
                     priv->state = enable_mp ? WM_STATE_MP_INITIALIZING : WM_STATE_REPORT_REQ;
                 } else {
-                    priv->state = WM_STATE_EXP_FIRST;
+                    /* Initialize the Motion+ as a normal extension, but skip the decrypt
+                     * steps, as they disable the Motion+ */
+                    priv->state = priv->motion_plus_enabled ? WM_STATE_EXP_IDENTIFICATION
+                                                            : WM_STATE_EXP_FIRST;
                 }
             } else if (!priv->exp_attached && !priv->motion_plus_probed) {
                 /* Wiibrew wiki says official games try up to three times. */
                 priv->remaining_attempts = 3;
                 priv->state = WM_STATE_MP_FIRST;
-            } else if (priv->exp_motion_plus &&
+            } else if (priv->exp_type == EGC_WIIMOTE_EXP_NONE && priv->exp_motion_plus &&
                        priv->motion_plus_enabled != priv->motion_plus_requested) {
                 priv->remaining_attempts = 3;
-                priv->state = WM_STATE_MP_ENABLING;
+                priv->state =
+                    priv->motion_plus_requested ? WM_STATE_MP_ENABLING : WM_STATE_MP_DISABLING1;
             } else if (priv->requested_rumble != priv->active_rumble) {
                 priv->state = WM_STATE_RUMBLE_REQ;
             } else if (!priv->report_type_requested) {
@@ -1297,16 +1320,18 @@ static void wm_step_next(egc_input_device_t *device)
     if (priv->state == WM_STATE_IR_ENABLE_LOGIC && !priv->ir_requested) {
         priv->state = WM_STATE_IDLE;
         wm_request_status(device);
+    } else if (priv->state == WM_STATE_MP_ENABLING) {
+        priv->state = WM_STATE_IDLE;
     } else if ((priv->state >= WM_STATE_IR_FIRST && priv->state < WM_STATE_IR_LAST) ||
                (priv->state >= WM_STATE_EXP_FIRST && priv->state < WM_STATE_EXP_LAST) ||
                (priv->state >= WM_STATE_MP_FIRST && priv->state < WM_STATE_MP_LAST)) {
         priv->state++;
-    } else if (priv->state == WM_STATE_MP_LAST) {
-        /* Initialize the Motion+ as a normal extension, but skip the decrypt
-         * steps, as they disable the Motion+ */
-        priv->state = WM_STATE_EXP_IDENTIFICATION;
     } else {
         priv->state = WM_STATE_IDLE;
+    }
+
+    if (priv->state == WM_STATE_EXP_READ_CALIBRATION) {
+        priv->remaining_attempts = 2;
     }
     wm_step(device);
 }
@@ -1417,6 +1442,10 @@ static void wm_status_cb(egc_input_device_t *device, const u8 *data)
      */
     priv->exp_attached = status & WM_STATUS_EXP_ATTACHED;
     priv->ir_enabled = status & WM_STATUS_IR_ENABLED;
+
+    if (priv->state == WM_STATE_MP_DISABLING_STATUS) {
+        priv->state = WM_STATE_IDLE;
+    }
 
     wm_step(device);
 }
