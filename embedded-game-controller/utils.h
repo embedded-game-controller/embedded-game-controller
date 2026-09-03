@@ -48,14 +48,16 @@
 
 static inline void egc_debug_data(const char *prefix, const u8 *data, u16 length)
 {
+    if (length == 0)
+        return;
+    u16 show_len = length <= 30 ? length : 30;
+
     char buffer[100];
-    if (length > 30)
-        length = 30;
     char *ptr = buffer;
-    for (int i = 0; i < length; i++) {
+    for (int i = 0; i < show_len; i++) {
         ptr += snprintf(ptr, sizeof(buffer) - (ptr - buffer), " %02x", data[i]);
     }
-    EGC_LOG("%s%s\n", prefix, buffer);
+    EGC_LOG("%s size %d:%s\n", prefix, length, buffer);
 }
 
 static inline int memmismatch(const void *restrict a, const void *restrict b, int size)
