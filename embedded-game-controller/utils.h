@@ -50,9 +50,9 @@ static inline void egc_debug_data(const char *prefix, const u8 *data, u16 length
 {
     if (length == 0)
         return;
-    u16 show_len = length <= 30 ? length : 30;
+    u16 show_len = length <= 50 ? length : 50;
 
-    char buffer[100];
+    char buffer[200];
     char *ptr = buffer;
     for (int i = 0; i < show_len; i++) {
         ptr += snprintf(ptr, sizeof(buffer) - (ptr - buffer), " %02x", data[i]);
