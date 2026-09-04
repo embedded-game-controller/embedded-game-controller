@@ -566,6 +566,10 @@ int _egc_bt_initialize()
 
     BteHci *hci = bte_hci_get(s_client);
     bte_hci_on_initialized(hci, initialized_cb, NULL);
+    /* Default callbacks (negative reply). Calling these functions is needed so
+     * that a default handler gets installed. */
+    bte_hci_on_pin_code_request(hci, NULL);
+    bte_hci_on_link_key_request(hci, NULL);
     return 0;
 }
 
