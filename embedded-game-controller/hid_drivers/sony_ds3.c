@@ -78,27 +78,6 @@ struct ds3_rumble {
     u8 power_left;
 };
 
-enum ds3_buttons_e {
-    DS3_BUTTON_TRIANGLE,
-    DS3_BUTTON_CIRCLE,
-    DS3_BUTTON_CROSS,
-    DS3_BUTTON_SQUARE,
-    DS3_BUTTON_UP,
-    DS3_BUTTON_DOWN,
-    DS3_BUTTON_LEFT,
-    DS3_BUTTON_RIGHT,
-    DS3_BUTTON_R3,
-    DS3_BUTTON_L3,
-    DS3_BUTTON_START,
-    DS3_BUTTON_SELECT,
-    DS3_BUTTON_R2,
-    DS3_BUTTON_L2,
-    DS3_BUTTON_R1,
-    DS3_BUTTON_L1,
-    DS3_BUTTON_PS,
-    DS3_BUTTON_COUNT
-};
-
 enum ds3_analog_axis_e {
     DS3_ANALOG_AXIS_LEFT_X,
     DS3_ANALOG_AXIS_LEFT_Y,
@@ -116,25 +95,45 @@ struct ds3_private_data_t {
 static_assert(sizeof(struct ds3_private_data_t) <= EGC_INPUT_DEVICE_DRIVER_DATA_SIZE);
 #define PRIV(input_device) ((struct ds3_private_data_t *)get_priv(input_device)->private_data)
 
-/* Map each button of the controller to an egc_gamepad_button_e */
-static const egc_gamepad_button_e s_button_map[DS3_BUTTON_COUNT] = {
-    [DS3_BUTTON_UP] = EGC_GAMEPAD_BUTTON_DPAD_UP,
-    [DS3_BUTTON_DOWN] = EGC_GAMEPAD_BUTTON_DPAD_DOWN,
-    [DS3_BUTTON_LEFT] = EGC_GAMEPAD_BUTTON_DPAD_LEFT,
-    [DS3_BUTTON_RIGHT] = EGC_GAMEPAD_BUTTON_DPAD_RIGHT,
-    [DS3_BUTTON_TRIANGLE] = EGC_GAMEPAD_BUTTON_NORTH,
-    [DS3_BUTTON_CIRCLE] = EGC_GAMEPAD_BUTTON_EAST,
-    [DS3_BUTTON_CROSS] = EGC_GAMEPAD_BUTTON_SOUTH,
-    [DS3_BUTTON_SQUARE] = EGC_GAMEPAD_BUTTON_WEST,
-    [DS3_BUTTON_L1] = EGC_GAMEPAD_BUTTON_LEFT_SHOULDER,
-    [DS3_BUTTON_R1] = EGC_GAMEPAD_BUTTON_RIGHT_SHOULDER,
-    [DS3_BUTTON_L2] = EGC_GAMEPAD_BUTTON_LEFT_PADDLE1,
-    [DS3_BUTTON_R2] = EGC_GAMEPAD_BUTTON_RIGHT_PADDLE1,
-    [DS3_BUTTON_SELECT] = EGC_GAMEPAD_BUTTON_BACK,
-    [DS3_BUTTON_START] = EGC_GAMEPAD_BUTTON_START,
-    [DS3_BUTTON_PS] = EGC_GAMEPAD_BUTTON_GUIDE,
-    [DS3_BUTTON_L3] = EGC_GAMEPAD_BUTTON_LEFT_STICK,
-    [DS3_BUTTON_R3] = EGC_GAMEPAD_BUTTON_RIGHT_STICK,
+static const u8 s_elements_ds3[] = {
+    /* clang-format off */
+    EGC_INPUT_REPORT_TYPE_BUTTON4,
+        EGC_GAMEPAD_BUTTON_DPAD_LEFT,
+        EGC_GAMEPAD_BUTTON_DPAD_DOWN,
+        EGC_GAMEPAD_BUTTON_DPAD_RIGHT,
+        EGC_GAMEPAD_BUTTON_DPAD_UP,
+    EGC_INPUT_REPORT_TYPE_BUTTON4,
+        EGC_GAMEPAD_BUTTON_START,
+        EGC_GAMEPAD_BUTTON_RIGHT_STICK,
+        EGC_GAMEPAD_BUTTON_LEFT_STICK,
+        EGC_GAMEPAD_BUTTON_BACK,
+    EGC_INPUT_REPORT_TYPE_BUTTON4,
+        EGC_GAMEPAD_BUTTON_WEST,
+        EGC_GAMEPAD_BUTTON_SOUTH,
+        EGC_GAMEPAD_BUTTON_EAST,
+        EGC_GAMEPAD_BUTTON_NORTH,
+    EGC_INPUT_REPORT_TYPE_BUTTON4,
+        EGC_GAMEPAD_BUTTON_RIGHT_SHOULDER,
+        EGC_GAMEPAD_BUTTON_LEFT_SHOULDER,
+        EGC_GAMEPAD_BUTTON_RIGHT_TRIGGER,
+        EGC_GAMEPAD_BUTTON_LEFT_TRIGGER,
+    EGC_INPUT_REPORT_TYPE_SKIP, 4,
+    EGC_INPUT_REPORT_TYPE_BUTTON4,
+        EGC_GAMEPAD_BUTTON_INVALID,
+        EGC_GAMEPAD_BUTTON_INVALID,
+        EGC_GAMEPAD_BUTTON_INVALID,
+        EGC_GAMEPAD_BUTTON_GUIDE,
+    EGC_INPUT_REPORT_TYPE_SKIP, 8,
+    EGC_INPUT_REPORT_TYPE_AXIS_U8,
+        EGC_GAMEPAD_AXIS_LEFTX,
+    EGC_INPUT_REPORT_TYPE_AXIS_U8 | EGC_INPUT_REPORT_TYPE_AXIS_INVERTED,
+        EGC_GAMEPAD_AXIS_LEFTY,
+    EGC_INPUT_REPORT_TYPE_AXIS_U8,
+        EGC_GAMEPAD_AXIS_RIGHTX,
+    EGC_INPUT_REPORT_TYPE_AXIS_U8 | EGC_INPUT_REPORT_TYPE_AXIS_INVERTED,
+        EGC_GAMEPAD_AXIS_RIGHTY,
+    EGC_INPUT_REPORT_TYPE_END
+    /* clang-format on */
 };
 
 static const egc_device_description_t s_device_description = {
@@ -168,50 +167,25 @@ static const egc_device_description_t s_device_description = {
     .type = EGC_DEVICE_TYPE_GAMEPAD,
     .num_touch_points = 0,
     .num_leds = 4,
-    .num_accelerometers = 1,
+    .num_accelerometers = 0, /* TODO temp */
     .has_rumble = true,
 };
 
+static u8 s_output_report[] = {
+    0x01, /* Report ID */
+    0x00, 0xFF, 0x00, 0xFF, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00,
+    0xFF, 0x27, 0x10, 0x00, 0x32,
+    0xFF, 0x27, 0x10, 0x00, 0x32,
+    0xFF, 0x27, 0x10, 0x00, 0x32,
+    0xFF, 0x27, 0x10, 0x00, 0x32,
+    0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00
+};
+
 static int ds3_request_data(egc_input_device_t *device);
-
-static inline u32 ds3_get_buttons(const struct ds3_input_report *report)
-{
-    u32 mask = 0;
-
-#define MAP(field, button)                                                                         \
-    if (report->field)                                                                             \
-        mask |= BIT(button);
-
-    MAP(triangle, DS3_BUTTON_TRIANGLE)
-    MAP(circle, DS3_BUTTON_CIRCLE)
-    MAP(cross, DS3_BUTTON_CROSS)
-    MAP(square, DS3_BUTTON_SQUARE)
-    MAP(up, DS3_BUTTON_UP)
-    MAP(down, DS3_BUTTON_DOWN)
-    MAP(left, DS3_BUTTON_LEFT)
-    MAP(right, DS3_BUTTON_RIGHT)
-    MAP(r3, DS3_BUTTON_R3)
-    MAP(l3, DS3_BUTTON_L3)
-    MAP(start, DS3_BUTTON_START)
-    MAP(select, DS3_BUTTON_SELECT)
-    MAP(r2, DS3_BUTTON_R2)
-    MAP(l2, DS3_BUTTON_L2)
-    MAP(r1, DS3_BUTTON_R1)
-    MAP(l1, DS3_BUTTON_L1)
-    MAP(ps, DS3_BUTTON_PS)
-#undef MAP
-
-    return mask;
-}
-
-static inline void ds3_get_analog_axis(const struct ds3_input_report *report,
-                                       u8 analog_axis[static DS3_ANALOG_AXIS_COUNT])
-{
-    analog_axis[DS3_ANALOG_AXIS_LEFT_X] = report->left_x;
-    analog_axis[DS3_ANALOG_AXIS_LEFT_Y] = 255 - report->left_y;
-    analog_axis[DS3_ANALOG_AXIS_RIGHT_X] = report->right_x;
-    analog_axis[DS3_ANALOG_AXIS_RIGHT_Y] = 255 - report->right_y;
-}
 
 static void ds3_get_report_cb(egc_usb_transfer_t *transfer)
 {
@@ -219,22 +193,13 @@ static void ds3_get_report_cb(egc_usb_transfer_t *transfer)
     struct ds3_input_report *report = (void *)transfer->data;
     struct egc_input_state_t state;
 
+    EGC_DEBUG("status %d, length %d", transfer->status, transfer->length);
     if (transfer->status == EGC_USB_TRANSFER_STATUS_COMPLETED) {
-        u32 buttons = ds3_get_buttons(report);
-        egc_device_driver_set_buttons(
-            &state, egc_device_driver_map_buttons(buttons, DS3_BUTTON_COUNT, s_button_map));
+        EGC_DEBUG_DATA(transfer->data, transfer->length);
+        if (transfer->length == 0)
+            return;
 
-        u8 axes[DS3_ANALOG_AXIS_COUNT];
-        ds3_get_analog_axis(report, axes);
-        egc_device_driver_set_axis(&state, EGC_GAMEPAD_AXIS_LEFTX,
-                                   egc_u8_to_s16(axes[DS3_ANALOG_AXIS_LEFT_X]));
-        egc_device_driver_set_axis(&state, EGC_GAMEPAD_AXIS_LEFTY,
-                                   egc_u8_to_s16(axes[DS3_ANALOG_AXIS_LEFT_Y]));
-        egc_device_driver_set_axis(&state, EGC_GAMEPAD_AXIS_RIGHTX,
-                                   egc_u8_to_s16(axes[DS3_ANALOG_AXIS_RIGHT_X]));
-        egc_device_driver_set_axis(&state, EGC_GAMEPAD_AXIS_RIGHTY,
-                                   egc_u8_to_s16(axes[DS3_ANALOG_AXIS_RIGHT_Y]));
-
+        egc_device_driver_parse_report((u8*)report + 2, s_elements_ds3, &state);
         egc_accelerometer_t *accel = egc_device_driver_get_accelerometer(device, &state, 0);
 #define MAP_ACCEL(v) ((v) * EGC_ACCELEROMETER_RES_PER_G / DS3_ACC_RES_PER_G)
         accel->x = MAP_ACCEL((s16)report->acc_x - 511);
@@ -250,23 +215,65 @@ static void ds3_get_report_cb(egc_usb_transfer_t *transfer)
 
 static int ds3_request_data(egc_input_device_t *device)
 {
+    /*
     const egc_usb_transfer_t *transfer = egc_device_driver_issue_ctrl_transfer_async(
         device, EGC_USB_REQTYPE_INTERFACE_GET, EGC_USB_REQ_GETREPORT,
         (EGC_USB_REPTYPE_INPUT << 8) | 0x01, 0, NULL, 0, ds3_get_report_cb);
+        */
+    const egc_usb_transfer_t *transfer = egc_device_driver_issue_intr_transfer_async(
+        device, EGC_USB_ENDPOINT_IN | 1, NULL, sizeof(struct ds3_input_report), ds3_get_report_cb);
+    EGC_DEBUG("Got transfer %p", transfer);
+    return transfer != NULL ? 0 : -1;
+}
+
+static void ds3_set_operational3_cb(egc_usb_transfer_t *transfer)
+{
+    egc_input_device_t *device = transfer->device;
+    EGC_DEBUG("status %d", transfer->status);
+    EGC_DEBUG_DATA(transfer->data, transfer->length);
+    ds3_request_data(device);
+}
+
+static void ds3_set_operational2_cb(egc_usb_transfer_t *transfer)
+{
+    egc_input_device_t *device = transfer->device;
+    EGC_DEBUG("status %d", transfer->status);
+    EGC_DEBUG_DATA(transfer->data, transfer->length);
+    {
+        const egc_usb_transfer_t *transfer = egc_device_driver_issue_intr_transfer_async(
+            device, EGC_USB_ENDPOINT_OUT | 2, s_output_report, sizeof(s_output_report),
+            ds3_set_operational3_cb);
+    }
+}
+
+static int ds3_set_operational2(egc_input_device_t *device)
+{
+    char buf[] = { 0x42, 0x0C, 0x00, 0x00 };
+    const egc_usb_transfer_t *transfer = egc_device_driver_issue_ctrl_transfer_async(
+        device, EGC_USB_REQTYPE_INTERFACE_GET, EGC_USB_REQ_GETREPORT,
+        (EGC_USB_REPTYPE_FEATURE << 8) | 0xf4, 0, buf, sizeof(buf), ds3_set_operational2_cb);
     return transfer != NULL ? 0 : -1;
 }
 
 static void ds3_set_operational_cb(egc_usb_transfer_t *transfer)
 {
     egc_input_device_t *device = transfer->device;
-    ds3_request_data(device);
+    if (transfer->status == EGC_USB_TRANSFER_STATUS_COMPLETED) {
+        /* There's the controller's MAC BT address at offset 4 */
+        EGC_DEBUG_DATA(transfer->data, transfer->length);
+    } else {
+        EGC_DEBUG("status %d", transfer->status);
+    }
+    ds3_set_operational2(device);
 }
 
 static int ds3_set_operational(egc_input_device_t *device)
 {
+    EGC_DEBUG("");
+    char buf[17];
     const egc_usb_transfer_t *transfer = egc_device_driver_issue_ctrl_transfer_async(
         device, EGC_USB_REQTYPE_INTERFACE_GET, EGC_USB_REQ_GETREPORT,
-        (EGC_USB_REPTYPE_FEATURE << 8) | 0xf2, 0, NULL, 0, ds3_set_operational_cb);
+        (EGC_USB_REPTYPE_FEATURE << 8) | 0xf2, 0, buf, sizeof(buf), ds3_set_operational_cb);
     return transfer != NULL ? 0 : -1;
 }
 
@@ -327,12 +334,15 @@ int ds3_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
     int ret;
     struct ds3_private_data_t *priv = PRIV(device);
 
+    EGC_DEBUG("");
     device->desc = &s_device_description;
 
     /* Init private state */
     priv->leds = 0;
     priv->rumble_low = priv->rumble_high = 0;
 
+    egc_device_driver_set_endpoints(device, EGC_USB_ENDPOINT_IN | 1, 5, EGC_USB_ENDPOINT_OUT | 2,
+                                    5);
     ret = ds3_set_operational(device);
     if (ret < 0)
         return ret;
