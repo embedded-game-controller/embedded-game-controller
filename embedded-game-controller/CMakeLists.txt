@@ -28,7 +28,7 @@ else()
     message(FATAL_ERROR "No available platform backend")
 endif()
 
-add_library(embedded-game-controller STATIC
+add_library(embedded-game-controller-objects OBJECT
     ${PLATFORM_SOURCES}
     bluetooth.c
     egc.c
@@ -40,27 +40,27 @@ add_library(embedded-game-controller STATIC
     hid_drivers/wiimote.c
 )
 
-target_include_directories(embedded-game-controller PUBLIC
+target_include_directories(embedded-game-controller-objects PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-target_link_options(embedded-game-controller PRIVATE
+target_link_options(embedded-game-controller-objects PRIVATE
     ${EXTRA_LDFLAGS}
 )
 
-target_link_libraries(embedded-game-controller PRIVATE
+target_link_libraries(embedded-game-controller-objects PRIVATE
     ${EXTRA_LIBS}
 )
 
 if(WITH_BLUETOOTH)
     pkg_check_modules(BTEMBEDDED REQUIRED IMPORTED_TARGET bt-embedded)
     set(PC_REQUIRES "${PC_REQUIRES} bt-embedded")
-    target_link_libraries(embedded-game-controller PUBLIC PkgConfig::BTEMBEDDED)
-    target_compile_definitions(embedded-game-controller PRIVATE WITH_BLUETOOTH=1)
+    target_link_libraries(embedded-game-controller-objects PUBLIC PkgConfig::BTEMBEDDED)
+    target_compile_definitions(embedded-game-controller-objects PRIVATE WITH_BLUETOOTH=1)
 endif()
 
 if(WITH_DEBUG)
-    target_compile_definitions(embedded-game-controller PRIVATE EGC_WITH_DEBUG)
+    target_compile_definitions(embedded-game-controller-objects PRIVATE EGC_WITH_DEBUG)
 endif()
 
 set(NEEDS_LIBM OFF)
@@ -86,9 +86,15 @@ if(WITH_GENERIC_MAPPINGS)
 endif()
 
 if(NEEDS_LIBM)
-    target_link_libraries(embedded-game-controller PRIVATE m)
+    target_link_libraries(embedded-game-controller-objects PRIVATE m)
     set(PC_EXTRA_LIBS "${PC_EXTRA_LIBS} -lm")
 endif()
+
+add_library(embedded-game-controller STATIC "")
+
+target_link_libraries(embedded-game-controller PUBLIC
+    embedded-game-controller-objects
+)
 
 set(PUBLIC_HEADERS
     egc.h
