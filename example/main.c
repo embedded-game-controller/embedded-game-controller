@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "egc.h"
+#include "embedded-game-controller/egc.h"
 #include "terminal.h"
 
 #define MAX_DEVICES 4

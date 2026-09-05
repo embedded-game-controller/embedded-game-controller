@@ -40,8 +40,11 @@ add_library(embedded-game-controller-objects OBJECT
     hid_drivers/wiimote.c
 )
 
-target_include_directories(embedded-game-controller-objects PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
+target_include_directories(embedded-game-controller-objects
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/.
+    PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
 
 target_link_options(embedded-game-controller-objects PRIVATE
