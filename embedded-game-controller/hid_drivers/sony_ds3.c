@@ -187,27 +187,32 @@ static u8 s_output_report[] = {
 
 static int ds3_request_data(egc_input_device_t *device);
 
+static void ds3_parse_report(egc_input_device_t *device, struct ds3_input_report *report)
+{
+    struct egc_input_state_t state = { 0 };
+
+    egc_device_driver_parse_report((u8*)report + 2, s_elements_ds3, &state);
+    egc_accelerometer_t *accel = egc_device_driver_get_accelerometer(device, &state, 0);
+#define MAP_ACCEL(v) ((v) * EGC_ACCELEROMETER_RES_PER_G / DS3_ACC_RES_PER_G)
+    accel->x = MAP_ACCEL((s16)report->acc_x - 511);
+    accel->y = MAP_ACCEL(511 - (s16)report->acc_y);
+    accel->z = MAP_ACCEL(511 - (s16)report->acc_z);
+#undef MAP_ACCEL
+
+    egc_device_driver_report_input(device, &state);
+}
+
 static void ds3_get_report_cb(egc_usb_transfer_t *transfer)
 {
     egc_input_device_t *device = transfer->device;
     struct ds3_input_report *report = (void *)transfer->data;
-    struct egc_input_state_t state;
 
     EGC_DEBUG("status %d, length %d", transfer->status, transfer->length);
     if (transfer->status == EGC_USB_TRANSFER_STATUS_COMPLETED) {
         EGC_DEBUG_DATA(transfer->data, transfer->length);
-        if (transfer->length == 0)
-            return;
-
-        egc_device_driver_parse_report((u8*)report + 2, s_elements_ds3, &state);
-        egc_accelerometer_t *accel = egc_device_driver_get_accelerometer(device, &state, 0);
-#define MAP_ACCEL(v) ((v) * EGC_ACCELEROMETER_RES_PER_G / DS3_ACC_RES_PER_G)
-        accel->x = MAP_ACCEL((s16)report->acc_x - 511);
-        accel->y = MAP_ACCEL(511 - (s16)report->acc_y);
-        accel->z = MAP_ACCEL(511 - (s16)report->acc_z);
-#undef MAP_ACCEL
-
-        egc_device_driver_report_input(device, &state);
+        if (transfer->length >= sizeof(struct ds3_input_report) && report->report_id == 0x01) {
+            ds3_parse_report(device, report);
+        }
     }
 
     ds3_request_data(device);
