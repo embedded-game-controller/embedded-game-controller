@@ -221,6 +221,11 @@ struct wm_calibration_axis16_t {
     u16 center;
 };
 
+struct wm_calibration_corners_t {
+    /* top left, top right, bottom right, bottom left */
+    u16 corners[4];
+};
+
 struct wm_private_data_t {
     WmState state;
     u8 requested_leds : 4;
@@ -270,6 +275,11 @@ struct wm_private_data_t {
                     struct wm_calibration_axis_t r_stick_x;
                     struct wm_calibration_axis_t r_stick_y;
                 } classic;
+                struct wm_exp_cal_balance_board_t {
+                    struct wm_calibration_corners_t kg0;
+                    struct wm_calibration_corners_t kg17;
+                    struct wm_calibration_corners_t kg34;
+                } balance_board;
             } exp_cal;
         } wiimote;
         struct wm_wiiupro_cal_t {
@@ -1038,6 +1048,41 @@ static void wm_parse_exp(egc_input_device_t *device, const u8 *data, egc_input_s
         egc_device_driver_parse_report(data + 8, s_elements_classic_btn, state);
         /* And one more byte */
         egc_device_driver_parse_report(data + 10, s_elements_classic_wiiu_btn, state);
+    } else if (priv->exp_type == EGC_WIIMOTE_EXP_BALANCE_BOARD) {
+        struct wm_exp_cal_balance_board_t *cal = &priv->wiimote.exp_cal.balance_board;
+        u16 corners[4];
+        corners[0] = be16toh(*(u16 *)(data + 4));
+        corners[1] = be16toh(*(u16 *)(data + 0));
+        corners[2] = be16toh(*(u16 *)(data + 2));
+        corners[3] = be16toh(*(u16 *)(data + 6));
+        for (int i = 0; i < 4; i++) {
+            u16 a, b, w0, w1, v, raw;
+            raw = corners[i];
+            if (raw > cal->kg17.corners[i]) {
+                /* interpolate using 17 and 34 reference weights */
+                a = cal->kg17.corners[i];
+                b = cal->kg34.corners[i];
+                w0 = 17, w1 = 34;
+            } else {
+                /* interpolate using 0 and 17 reference weights */
+                a = cal->kg0.corners[i];
+                b = cal->kg17.corners[i];
+                w0 = 0, w1 = 17;
+                if (raw < a) {
+                    /* Don't allow values below zero */
+                    raw = a;
+                }
+            }
+            if (a == b) {
+                /* This should never happen */
+                v = 0;
+            } else {
+                /* linear interpolation and scaling according to
+                 * EGC_BOARD_RES_PER_100KG */
+                v = (w1 * (raw - a) + w0 * (b - raw)) * EGC_BOARD_RES_PER_100KG / ((b - a) * 100);
+            }
+            egc_device_driver_set_axis(state, EGC_BOARD_AXIS_TOP_LEFT + i, v);
+        }
     } else if (priv->exp_type == EGC_WIIMOTE_EXP_MOTION_PLUS) {
         bool exp_connected = data[4] & 0x01;
         if (exp_connected && priv->state == WM_STATE_IDLE) {
@@ -1069,7 +1114,7 @@ static inline void wm_calibration_axis16_from_center(struct wm_calibration_axis1
     cal->max = center + 1024;
 }
 
-static bool wm_expansion_calibration_parse(egc_input_device_t *device, const u8 *data)
+static bool wm_expansion_calibration_parse(egc_input_device_t *device, const u8 *data, u16 offset)
 {
     struct wm_private_data_t *priv = PRIV(device);
 
@@ -1112,6 +1157,29 @@ static bool wm_expansion_calibration_parse(egc_input_device_t *device, const u8 
         wm_calibration_axis16_from_center(&cal->r_stick_x, le16toh(*(u16 *)(data + 2)));
         wm_calibration_axis16_from_center(&cal->l_stick_y, le16toh(*(u16 *)(data + 4)));
         wm_calibration_axis16_from_center(&cal->r_stick_y, le16toh(*(u16 *)(data + 6)));
+    } else if (priv->exp_type == EGC_WIIMOTE_EXP_BALANCE_BOARD) {
+        struct wm_exp_cal_balance_board_t *cal = &priv->wiimote.exp_cal.balance_board;
+        /* We read 32 bytes, 16 at a time */
+        if (offset == (WM_REG_EXP_CALIBRATION & 0xffff)) {
+            /* The first 16 bytes of the calibration area */
+            cal->kg0.corners[0] = be16toh(*(u16 *)(data + 8));
+            cal->kg0.corners[1] = be16toh(*(u16 *)(data + 4));
+            cal->kg0.corners[2] = be16toh(*(u16 *)(data + 6));
+            cal->kg0.corners[3] = be16toh(*(u16 *)(data + 10));
+
+            cal->kg17.corners[1] = be16toh(*(u16 *)(data + 12));
+            cal->kg17.corners[2] = be16toh(*(u16 *)(data + 14));
+            /* Return false so that we'll read the next 16 bytes */
+            return false;
+        } else {
+            cal->kg17.corners[0] = be16toh(*(u16 *)(data + 2));
+            cal->kg17.corners[3] = be16toh(*(u16 *)(data + 0));
+
+            cal->kg34.corners[0] = be16toh(*(u16 *)(data + 8));
+            cal->kg34.corners[1] = be16toh(*(u16 *)(data + 4));
+            cal->kg34.corners[2] = be16toh(*(u16 *)(data + 6));
+            cal->kg34.corners[3] = be16toh(*(u16 *)(data + 10));
+        }
     } else if (priv->exp_type == EGC_WIIMOTE_EXP_MOTION_PLUS) {
         /* TODO: This data is garbage on my chinese replica */
     }
@@ -1153,6 +1221,20 @@ static void wm_expansion_setup(egc_input_device_t *device)
         /* clang-format on */
     } else if (priv->exp_type == EGC_WIIMOTE_EXP_MOTION_PLUS) {
         desc->num_gyroscopes = 1;
+    } else if (priv->exp_type == EGC_WIIMOTE_EXP_BALANCE_BOARD) {
+        desc->type = EGC_DEVICE_TYPE_BALANCE_BOARD;
+        desc->available_buttons = BIT(EGC_GAMEPAD_BUTTON_EAST);
+        desc->available_axes = BIT(EGC_BOARD_AXIS_TOP_LEFT) | BIT(EGC_BOARD_AXIS_TOP_RIGHT) |
+                               BIT(EGC_BOARD_AXIS_BOTTOM_RIGHT) | BIT(EGC_BOARD_AXIS_BOTTOM_LEFT);
+        desc->num_touch_points = 0;
+        desc->num_accelerometers = 0;
+        desc->num_gyroscopes = 0;
+        desc->num_leds = 1;
+        desc->has_rumble = false;
+
+        priv->held_sideways = false;
+        priv->ir_requested = false;
+        priv->accel_requested = false;
     }
 }
 
@@ -1412,6 +1494,8 @@ static void wm_read_cb(egc_input_device_t *device, const u8 *data, u8 actual_len
         }
         return;
     }
+
+    u16 offset = be16toh(*(u16 *)(data + 1));
     data += 3;
 
     if (priv->state == WM_STATE_CALIBRATION) {
@@ -1437,7 +1521,7 @@ static void wm_read_cb(egc_input_device_t *device, const u8 *data, u8 actual_len
         }
         wm_expansion_setup(device);
     } else if (priv->state == WM_STATE_EXP_READ_CALIBRATION) {
-        if (s_calibration_enabled && !wm_expansion_calibration_parse(device, data)) {
+        if (s_calibration_enabled && !wm_expansion_calibration_parse(device, data, offset)) {
             if (wm_step_retry(device))
                 return;
         }

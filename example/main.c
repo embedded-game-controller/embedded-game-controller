@@ -3,14 +3,15 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "embedded-game-controller/egc.h"
 #include "terminal.h"
+
+#include "embedded-game-controller/egc.h"
 
 #define MAX_DEVICES 4
 
 static egc_input_device_t *s_devices[MAX_DEVICES];
 
-static void print_status(egc_input_device_t *device)
+static void print_buttons(egc_input_device_t *device)
 {
     u32 buttons = egc_input_device_read_buttons(device);
 
@@ -95,6 +96,11 @@ static void print_status(egc_input_device_t *device)
     }
     printf("\n  ");
 #undef PRESSED
+}
+
+static void print_status_gamepad(egc_input_device_t *device)
+{
+    print_buttons(device);
 
 #define HAS_AXIS(x) (device->desc->available_axes & (1 << x))
     if (HAS_AXIS(EGC_GAMEPAD_AXIS_LEFTX)) {
@@ -135,6 +141,28 @@ static void print_status(egc_input_device_t *device)
 
     if (device->desc->available_axes || device->desc->num_accelerometers > 0) {
         printf("\n");
+    }
+}
+
+static void print_status_balance_board(egc_input_device_t *device)
+{
+    print_buttons(device);
+
+    float corners[4];
+    for (int i = 0; i < EGC_BOARD_AXIS_COUNT; i++) {
+        u16 value = (u16)egc_input_device_read_axis(device, i);
+        corners[i] = value / (float)EGC_BOARD_RES_PER_100KG;
+    }
+    printf("TL: %.3f TR: %.3f BR: %.3f BL: %.3f, Total %.3f\n", corners[0], corners[1], corners[2],
+           corners[3], corners[0] + corners[1] + corners[2] + corners[3]);
+}
+
+static void print_status(egc_input_device_t *device)
+{
+    if (device->desc->type == EGC_DEVICE_TYPE_GAMEPAD) {
+        print_status_gamepad(device);
+    } else if (device->desc->type == EGC_DEVICE_TYPE_BALANCE_BOARD) {
+        print_status_balance_board(device);
     }
 }
 

@@ -78,6 +78,20 @@ typedef enum ATTRIBUTE_PACKED {
 } egc_gamepad_axis_e;
 static_assert(sizeof(egc_gamepad_axis_e) == 1);
 
+/* Axis names for balance board */
+typedef enum ATTRIBUTE_PACKED {
+    EGC_BOARD_AXIS_TOP_LEFT,
+    EGC_BOARD_AXIS_TOP_RIGHT,
+    EGC_BOARD_AXIS_BOTTOM_RIGHT,
+    EGC_BOARD_AXIS_BOTTOM_LEFT,
+    EGC_BOARD_AXIS_COUNT
+} egc_board_axis_e;
+static_assert(sizeof(egc_board_axis_e) == 1);
+
+/* We assign the value of INT16_MAX to a weight of 100 kg (so the theoretical
+ * maximum is UINT16_MAX, 200KG) */
+#define EGC_BOARD_RES_PER_100KG INT16_MAX
+
 /* Resolution is 4096, therefore the range is +/- 8g */
 #define EGC_ACCELEROMETER_RES_PER_G 4096
 
