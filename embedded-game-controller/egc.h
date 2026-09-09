@@ -88,6 +88,45 @@ typedef enum ATTRIBUTE_PACKED {
 } egc_board_axis_e;
 static_assert(sizeof(egc_board_axis_e) == 1);
 
+typedef enum ATTRIBUTE_PACKED {
+    EGC_GUITAR_BUTTON_FRET0,
+    EGC_GUITAR_BUTTON_FRET1,
+    EGC_GUITAR_BUTTON_FRET2,
+    EGC_GUITAR_BUTTON_FRET3,
+    EGC_GUITAR_BUTTON_FRET4,
+    EGC_GUITAR_BUTTON_FRET5,
+    EGC_GUITAR_BUTTON_FRET6,
+    EGC_GUITAR_BUTTON_FRET7,
+    EGC_GUITAR_BUTTON_FRET8,
+    EGC_GUITAR_BUTTON_FRET9,
+    EGC_GUITAR_BUTTON_FRET10,
+    EGC_GUITAR_BUTTON_FRET11,
+    EGC_GUITAR_BUTTON_STRUM_UP,
+    EGC_GUITAR_BUTTON_STRUM_DOWN,
+    EGC_GUITAR_BUTTON_START,
+    EGC_GUITAR_BUTTON_BACK,
+    EGC_GUITAR_BUTTON_GUIDE,
+    EGC_GUITAR_BUTTON_DPAD_UP,
+    EGC_GUITAR_BUTTON_DPAD_DOWN,
+    EGC_GUITAR_BUTTON_DPAD_LEFT,
+    EGC_GUITAR_BUTTON_DPAD_RIGHT,
+    EGC_GUITAR_BUTTON_COUNT,
+    EGC_GUITAR_BUTTON_INVALID = 0xff
+} egc_guitar_button_e;
+/* Each enum value corresponds to a bit in a 32 bit-wide field */
+static_assert(EGC_GUITAR_BUTTON_COUNT <= 32);
+static_assert(sizeof(egc_guitar_button_e) == 1);
+
+/* Axis names for guitars */
+typedef enum ATTRIBUTE_PACKED {
+    EGC_GUITAR_AXIS_WHAMMY_BAR,
+    EGC_GUITAR_AXIS_EFFECT,
+    EGC_GUITAR_AXIS_STICKX,
+    EGC_GUITAR_AXIS_STICKY,
+    EGC_GUITAR_AXIS_COUNT
+} egc_guitar_axis_e;
+static_assert(sizeof(egc_guitar_axis_e) == 1);
+
 /* We assign the value of INT16_MAX to a weight of 100 kg (so the theoretical
  * maximum is UINT16_MAX, 200KG) */
 #define EGC_BOARD_RES_PER_100KG INT16_MAX

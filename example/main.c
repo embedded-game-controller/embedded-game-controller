@@ -8,99 +8,85 @@
 #include "embedded-game-controller/egc.h"
 
 #define MAX_DEVICES 4
+#define BIT(x)      (1 << x)
 
 static egc_input_device_t *s_devices[MAX_DEVICES];
 
-static void print_buttons(egc_input_device_t *device)
+static const char *s_button_names_gamepad[] = {
+    /* clang-format off */
+    "SOUTH",
+    "EAST",
+    "WEST",
+    "NORTH",
+    "BACK",
+    "GUIDE",
+    "START",
+    "LEFT_STICK",
+    "RIGHT_STICK",
+    "LEFT_SHOULDER",
+    "RIGHT_SHOULDER",
+    "↑",
+    "↓",
+    "←",
+    "→",
+    "MISC1",
+    "RIGHT_PADDLE1",
+    "LEFT_PADDLE1",
+    "RIGHT_PADDLE2",
+    "LEFT_PADDLE2",
+    "TOUCHPAD",
+    "MISC2",
+    "MISC3",
+    "MISC4",
+    "MISC5",
+    "MISC6",
+    /* clang-format on */
+};
+static_assert(sizeof(s_button_names_gamepad) == sizeof(char *) * EGC_GAMEPAD_BUTTON_COUNT);
+
+static const char *s_button_names_guitar[] = {
+    /* clang-format off */
+    "FRET0",
+    "FRET1",
+    "FRET2",
+    "FRET3",
+    "FRET4",
+    "FRET5",
+    "FRET6",
+    "FRET7",
+    "FRET8",
+    "FRET9",
+    "FRET10",
+    "FRET11",
+    "STRUM_UP",
+    "STRUM_DOWN",
+    "START",
+    "BACK",
+    "GUIDE",
+    "DPAD_UP",
+    "DPAD_DOWN",
+    "DPAD_LEFT",
+    "DPAD_RIGHT",
+    /* clang-format on */
+};
+static_assert(sizeof(s_button_names_guitar) == sizeof(char *) * EGC_GUITAR_BUTTON_COUNT);
+
+static void print_buttons(egc_input_device_t *device, const char **names)
 {
     u32 buttons = egc_input_device_read_buttons(device);
 
-#define PRESSED(b) (buttons & (1 << b))
-    if (PRESSED(EGC_GAMEPAD_BUTTON_SOUTH)) {
-        printf("SOUTH ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_EAST)) {
-        printf("EAST ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_WEST)) {
-        printf("WEST ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_NORTH)) {
-        printf("NORTH ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_BACK)) {
-        printf("BACK ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_GUIDE)) {
-        printf("GUIDE ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_START)) {
-        printf("START ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_LEFT_STICK)) {
-        printf("LEFT-STICK ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_RIGHT_STICK)) {
-        printf("RIGHT-STICK ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_LEFT_SHOULDER)) {
-        printf("LEFT-SHOULDER ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_RIGHT_SHOULDER)) {
-        printf("RIGHT-SHOULDER ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_DPAD_DOWN)) {
-        printf("↓ ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_DPAD_LEFT)) {
-        printf("← ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_DPAD_RIGHT)) {
-        printf("→ ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_DPAD_UP)) {
-        printf("↑ ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_MISC1)) {
-        printf("MISC1 ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_LEFT_PADDLE1)) {
-        printf("LEFT-PADDLE1 ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_RIGHT_PADDLE1)) {
-        printf("RIGHT-PADDLE1 ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_LEFT_PADDLE2)) {
-        printf("LEFT-PADDLE2 ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_RIGHT_PADDLE2)) {
-        printf("RIGHT-PADDLE2 ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_TOUCHPAD)) {
-        printf("TOUCHPAD ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_MISC2)) {
-        printf("MISC2 ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_MISC3)) {
-        printf("MISC3 ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_MISC4)) {
-        printf("MISC4 ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_MISC5)) {
-        printf("MISC5 ");
-    }
-    if (PRESSED(EGC_GAMEPAD_BUTTON_MISC6)) {
-        printf("MISC6 ");
+    for (int i = 0; i < EGC_GAMEPAD_BUTTON_COUNT; i++) {
+        u32 mask = 1 << i;
+        if ((device->desc->available_buttons & mask) && (buttons & mask)) {
+            printf("%s ", names[i]);
+        }
     }
     printf("\n  ");
-#undef PRESSED
 }
 
 static void print_status_gamepad(egc_input_device_t *device)
 {
-    print_buttons(device);
+    print_buttons(device, s_button_names_gamepad);
 
 #define HAS_AXIS(x) (device->desc->available_axes & (1 << x))
     if (HAS_AXIS(EGC_GAMEPAD_AXIS_LEFTX)) {
@@ -144,9 +130,38 @@ static void print_status_gamepad(egc_input_device_t *device)
     }
 }
 
+static void print_status_guitar(egc_input_device_t *device)
+{
+    print_buttons(device, s_button_names_guitar);
+
+    s16 *axes;
+    egc_accelerometer_t *accelerometers;
+    egc_input_device_read_data(device, EGC_READ_AXES | EGC_READ_ACCELEROMETERS, &axes,
+                               &accelerometers);
+    if (device->desc->available_axes & BIT(EGC_GUITAR_AXIS_WHAMMY_BAR)) {
+        printf("Whammy %5d ", axes[EGC_GUITAR_AXIS_WHAMMY_BAR]);
+    }
+    if (device->desc->available_axes & BIT(EGC_GUITAR_AXIS_EFFECT)) {
+        printf("Effect %5d ", axes[EGC_GUITAR_AXIS_EFFECT]);
+    }
+    if (device->desc->available_axes & BIT(EGC_GUITAR_AXIS_STICKX)) {
+        printf("Stick (%5d,%5d) ", axes[EGC_GUITAR_AXIS_STICKX], axes[EGC_GUITAR_AXIS_STICKY]);
+    } else
+        printf("Axes %08x ", device->desc->available_axes);
+
+    for (int i = 0; i < device->desc->num_accelerometers; i++) {
+        const egc_accelerometer_t *accel = &accelerometers[i];
+        printf("Accel%d (%d %d %d) ", i, accel->x, accel->y, accel->z);
+    }
+
+    if (device->desc->available_axes || device->desc->num_accelerometers > 0) {
+        printf("\n");
+    }
+}
+
 static void print_status_balance_board(egc_input_device_t *device)
 {
-    print_buttons(device);
+    print_buttons(device, s_button_names_gamepad);
 
     float corners[4];
     for (int i = 0; i < EGC_BOARD_AXIS_COUNT; i++) {
@@ -161,6 +176,8 @@ static void print_status(egc_input_device_t *device)
 {
     if (device->desc->type == EGC_DEVICE_TYPE_GAMEPAD) {
         print_status_gamepad(device);
+    } else if (device->desc->type == EGC_DEVICE_TYPE_GUITAR) {
+        print_status_guitar(device);
     } else if (device->desc->type == EGC_DEVICE_TYPE_BALANCE_BOARD) {
         print_status_balance_board(device);
     }

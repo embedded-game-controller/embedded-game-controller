@@ -145,6 +145,32 @@ static const u8 s_elements_classic_wiiu_btn[] = {
     /* clang-format on */
 };
 
+static const u8 s_elements_guitar_btn[] = {
+    /* clang-format off */
+    EGC_INPUT_REPORT_TYPE_BUTTON4_INVERTED,
+        EGC_GUITAR_BUTTON_INVALID,
+        EGC_GUITAR_BUTTON_STRUM_DOWN,
+        EGC_GUITAR_BUTTON_INVALID,
+        EGC_GUITAR_BUTTON_BACK,
+    EGC_INPUT_REPORT_TYPE_BUTTON4_INVERTED,
+        EGC_GUITAR_BUTTON_INVALID,
+        EGC_GUITAR_BUTTON_START,
+        EGC_GUITAR_BUTTON_INVALID,
+        EGC_GUITAR_BUTTON_INVALID,
+    EGC_INPUT_REPORT_TYPE_BUTTON4_INVERTED,
+        EGC_GUITAR_BUTTON_FRET4,
+        EGC_GUITAR_BUTTON_FRET1,
+        EGC_GUITAR_BUTTON_FRET3,
+        EGC_GUITAR_BUTTON_FRET0,
+    EGC_INPUT_REPORT_TYPE_BUTTON4_INVERTED,
+        EGC_GUITAR_BUTTON_FRET2,
+        EGC_GUITAR_BUTTON_INVALID, /* cancel button on the RJ11 port */
+        EGC_GUITAR_BUTTON_INVALID,
+        EGC_GUITAR_BUTTON_STRUM_UP,
+    EGC_INPUT_REPORT_TYPE_END
+    /* clang-format on */
+};
+
 typedef enum ATTRIBUTE_PACKED {
     WM_STATE_IDLE = 0,
 
@@ -275,6 +301,11 @@ struct wm_private_data_t {
                     struct wm_calibration_axis_t r_stick_x;
                     struct wm_calibration_axis_t r_stick_y;
                 } classic;
+                struct wm_exp_cal_guitar_t {
+                    struct wm_calibration_axis_t stick_x;
+                    struct wm_calibration_axis_t stick_y;
+                    struct wm_calibration_axis_t whammy;
+                } guitar;
                 struct wm_exp_cal_balance_board_t {
                     struct wm_calibration_corners_t kg0;
                     struct wm_calibration_corners_t kg17;
@@ -1048,6 +1079,33 @@ static void wm_parse_exp(egc_input_device_t *device, const u8 *data, egc_input_s
         egc_device_driver_parse_report(data + 8, s_elements_classic_btn, state);
         /* And one more byte */
         egc_device_driver_parse_report(data + 10, s_elements_classic_wiiu_btn, state);
+    } else if (priv->exp_type == EGC_WIIMOTE_EXP_GUITAR_HERO_3) {
+        struct wm_exp_cal_guitar_t *cal = &priv->wiimote.exp_cal.guitar;
+        u8 stick_x = data[0] & 0x3f;
+        u8 stick_y = data[1] & 0x3f;
+        u8 whammy = data[3] & 0x1f;
+
+        if (cal->stick_x.min == 255) {
+            /* Still not calibrated: use the current reading as center value */
+            cal->stick_x.center = stick_x;
+            cal->stick_x.min = cal->stick_x.center - 16;
+            cal->stick_x.max = cal->stick_x.center + 16;
+            cal->stick_y.center = stick_y;
+            cal->stick_y.min = cal->stick_y.center - 16;
+            cal->stick_y.max = cal->stick_y.center + 16;
+            cal->whammy.center = whammy;
+            cal->whammy.min = cal->whammy.center - 8;
+            cal->whammy.max = cal->whammy.center + 8;
+        }
+        egc_device_driver_set_axis(state, EGC_GUITAR_AXIS_STICKX,
+                                   wm_axis_value(stick_x, &cal->stick_x));
+        egc_device_driver_set_axis(state, EGC_GUITAR_AXIS_STICKY,
+                                   -1 - wm_axis_value(stick_y, &cal->stick_y));
+        ;
+        egc_device_driver_set_axis(state, EGC_GUITAR_AXIS_WHAMMY_BAR,
+                                   wm_axis_value(whammy, &cal->whammy));
+        ;
+        egc_device_driver_parse_report(data + 4, s_elements_guitar_btn, state);
     } else if (priv->exp_type == EGC_WIIMOTE_EXP_BALANCE_BOARD) {
         struct wm_exp_cal_balance_board_t *cal = &priv->wiimote.exp_cal.balance_board;
         u16 corners[4];
@@ -1221,6 +1279,30 @@ static void wm_expansion_setup(egc_input_device_t *device)
         /* clang-format on */
     } else if (priv->exp_type == EGC_WIIMOTE_EXP_MOTION_PLUS) {
         desc->num_gyroscopes = 1;
+    } else if (priv->exp_type == EGC_WIIMOTE_EXP_GUITAR_HERO_3) {
+        desc->type = EGC_DEVICE_TYPE_GUITAR;
+        struct wm_exp_cal_guitar_t *cal = &priv->wiimote.exp_cal.guitar;
+        /* We use the 255 value to mark the axes as uncalibrated. */
+        cal->stick_x.min = 255;
+
+        /* clang-format off */
+        desc->available_buttons =
+            BIT(EGC_GUITAR_BUTTON_FRET0) |
+            BIT(EGC_GUITAR_BUTTON_FRET1) |
+            BIT(EGC_GUITAR_BUTTON_FRET2) |
+            BIT(EGC_GUITAR_BUTTON_FRET3) |
+            BIT(EGC_GUITAR_BUTTON_FRET4) |
+            BIT(EGC_GUITAR_BUTTON_STRUM_UP) |
+            BIT(EGC_GUITAR_BUTTON_STRUM_DOWN) |
+            BIT(EGC_GUITAR_BUTTON_START) |
+            BIT(EGC_GUITAR_BUTTON_BACK);
+        desc->available_axes =
+            BIT(EGC_GUITAR_AXIS_WHAMMY_BAR) |
+            BIT(EGC_GUITAR_AXIS_STICKX) |
+            BIT(EGC_GUITAR_AXIS_STICKY);
+        /* clang-format on */
+        desc->num_touch_points = 0;
+        priv->ir_requested = false;
     } else if (priv->exp_type == EGC_WIIMOTE_EXP_BALANCE_BOARD) {
         desc->type = EGC_DEVICE_TYPE_BALANCE_BOARD;
         desc->available_buttons = BIT(EGC_GAMEPAD_BUTTON_EAST);
