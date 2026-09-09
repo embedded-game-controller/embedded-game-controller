@@ -2,6 +2,7 @@
 #define EGC_H
 
 #include <assert.h>
+#include <stdarg.h>
 
 #include "egc_types.h"
 
@@ -180,35 +181,78 @@ int egc_input_device_resume(egc_input_device_t *device);
 int egc_input_device_set_leds(egc_input_device_t *device, u32 led_state);
 int egc_input_device_set_rumble(egc_input_device_t *device, u16 low_frequency, u16 high_frequency);
 
-/* These macros are for internal use */
-#define _EGC_STATE_OFFSET_AXES  sizeof(u32)
-#define _EGC_STATE_OFFSET_ACCEL (_EGC_STATE_OFFSET_AXES + sizeof(s16) * EGC_GAMEPAD_AXIS_COUNT)
+typedef enum {
+    EGC_READ_BUTTONS = 1 << 0,
+    EGC_READ_AXES = 1 << 1,
+    EGC_READ_ACCELEROMETERS = 1 << 2,
+    EGC_READ_GYROSCOPE = 1 << 3,
+    EGC_READ_TOUCH_POINTS = 1 << 4,
+} egc_read_data_e;
+
+static inline void egc_input_device_read_data(egc_input_device_t *device, egc_read_data_e mask, ...)
+{
+    va_list args;
+    va_start(args, mask);
+    int offset = 0;
+
+    if (mask & EGC_READ_BUTTONS) {
+        u32 *dest = va_arg(args, void *);
+        *dest = *(u32 *)(device->state.bytes + offset);
+    }
+    offset += sizeof(u32);
+
+    if (mask & EGC_READ_AXES) {
+        void **dest = va_arg(args, void *);
+        *dest = device->state.bytes + offset;
+    }
+    offset += sizeof(s16) * EGC_GAMEPAD_AXIS_COUNT;
+
+    if (mask & EGC_READ_ACCELEROMETERS) {
+        void **dest = va_arg(args, void *);
+        *dest = device->state.bytes + offset;
+    }
+    offset += sizeof(egc_accelerometer_t) * device->desc->num_accelerometers;
+
+    if (mask & EGC_READ_GYROSCOPE) {
+        void **dest = va_arg(args, void *);
+        *dest = device->state.bytes + offset;
+    }
+    offset += sizeof(egc_gyroscope_t) * device->desc->num_gyroscopes;
+
+    if (mask & EGC_READ_TOUCH_POINTS) {
+        void **dest = va_arg(args, void *);
+        *dest = device->state.bytes + offset;
+    }
+    offset += sizeof(egc_point_t) * device->desc->num_touch_points;
+}
 
 static inline u32 egc_input_device_read_buttons(egc_input_device_t *device)
 {
-    return *(u32 *)device->state.bytes;
+    u32 buttons;
+    egc_input_device_read_data(device, EGC_READ_BUTTONS, &buttons);
+    return buttons;
 }
 
 static inline s16 egc_input_device_read_axis(egc_input_device_t *device, egc_gamepad_axis_e axis)
 {
-    s16 *axes = (s16 *)(device->state.bytes + _EGC_STATE_OFFSET_AXES);
+    s16 *axes;
+    egc_input_device_read_data(device, EGC_READ_AXES, &axes);
     return axes[axis];
 }
 
 static inline const egc_accelerometer_t *
 egc_input_device_read_accelerometer(egc_input_device_t *device, int index)
 {
-    egc_accelerometer_t *accel =
-        (egc_accelerometer_t *)(device->state.bytes + _EGC_STATE_OFFSET_ACCEL);
+    egc_accelerometer_t *accel;
+    egc_input_device_read_data(device, EGC_READ_ACCELEROMETERS, &accel);
     return &accel[index];
 }
 
 static inline const egc_gyroscope_t *egc_input_device_read_gyroscope(egc_input_device_t *device,
                                                                      int index)
 {
-    egc_gyroscope_t *gyro =
-        (egc_gyroscope_t *)(device->state.bytes + _EGC_STATE_OFFSET_ACCEL +
-                            sizeof(egc_accelerometer_t) * device->desc->num_accelerometers);
+    egc_gyroscope_t *gyro;
+    egc_input_device_read_data(device, EGC_READ_GYROSCOPE, &gyro);
     return &gyro[index];
 }
 
@@ -218,10 +262,8 @@ static inline egc_point_t egc_input_device_read_touch_point(egc_input_device_t *
         return (egc_point_t){ -1, -1 };
     }
 
-    egc_point_t *points =
-        (egc_point_t *)(device->state.bytes + _EGC_STATE_OFFSET_ACCEL +
-                        sizeof(egc_accelerometer_t) * device->desc->num_accelerometers +
-                        sizeof(egc_gyroscope_t) * device->desc->num_gyroscopes);
+    egc_point_t *points;
+    egc_input_device_read_data(device, EGC_READ_TOUCH_POINTS, &points);
     return points[index];
 }
 
