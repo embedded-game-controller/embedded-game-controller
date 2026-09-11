@@ -355,6 +355,7 @@ static union {
     EgcDriverWiimoteReadDataCb read_data;
     EgcDriverWiimoteWriteDataCb write_data;
 } s_client_cb;
+static EgcDriverWiimoteInputHandlerCb s_input_handler_cb = NULL;
 static bool s_calibration_enabled = true;
 static bool s_sideways_default = false;
 static s16 s_bar_offset_y = WM_BAR_OFFSET_Y;
@@ -1747,6 +1748,12 @@ static void wm_driver_ops_intr_event(egc_input_device_t *device, const void *dat
     const u8 *report = data;
 
     // EGC_DEBUG_DATA(data, length);
+
+    if (s_input_handler_cb && s_input_handler_cb(device, data, length)) {
+        /* The client has handled this report, we should not process it further. */
+        return;
+    }
+
     u8 report_type = report[0];
     report++;
     length--;
@@ -1975,6 +1982,11 @@ bool egc_driver_wiimote_write_data(egc_input_device_t *device, u32 address, void
 {
     s_client_cb.write_data = callback;
     return wm_write_data(device, address, data, size) >= 0;
+}
+
+void egc_driver_wiimote_register_input_handler(EgcDriverWiimoteInputHandlerCb callback)
+{
+    s_input_handler_cb = callback;
 }
 
 void egc_driver_wiimote_set_sideways(egc_input_device_t *device, bool held_sideways)
