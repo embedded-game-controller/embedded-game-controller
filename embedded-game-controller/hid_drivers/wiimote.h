@@ -40,6 +40,11 @@ typedef void (*EgcDriverWiimoteWriteDataCb)(egc_input_device_t *device, int erro
 bool egc_driver_wiimote_write_data(egc_input_device_t *device, u32 address, void *data, u8 size,
                                    EgcDriverWiimoteWriteDataCb callback);
 
+/* Return true if the client has handled the input report, that is if the driver should ignore it */
+typedef bool (*EgcDriverWiimoteInputHandlerCb)(egc_input_device_t *device, const void *data,
+                                               u16 size);
+void egc_driver_wiimote_register_input_handler(EgcDriverWiimoteInputHandlerCb callback);
+
 void egc_driver_wiimote_set_sideways(egc_input_device_t *device, bool held_sideways);
 void egc_driver_wiimote_set_sideways_default(bool held_sideways);
 
