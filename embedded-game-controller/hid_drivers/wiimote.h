@@ -45,6 +45,10 @@ typedef bool (*EgcDriverWiimoteInputHandlerCb)(egc_input_device_t *device, const
                                                u16 size);
 void egc_driver_wiimote_register_input_handler(EgcDriverWiimoteInputHandlerCb callback);
 
+/* x coordinate will be -1 if the point is not valid */
+void egc_driver_wiimote_get_ir_data(egc_input_device_t *device, egc_point_t *sb_points,
+                                    int *sb_width, float *angle);
+
 void egc_driver_wiimote_set_sideways(egc_input_device_t *device, bool held_sideways);
 void egc_driver_wiimote_set_sideways_default(bool held_sideways);
 
