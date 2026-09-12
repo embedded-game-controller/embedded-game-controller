@@ -1989,6 +1989,37 @@ void egc_driver_wiimote_register_input_handler(EgcDriverWiimoteInputHandlerCb ca
     s_input_handler_cb = callback;
 }
 
+void egc_driver_wiimote_get_ir_data(egc_input_device_t *device, egc_point_t *sb_points,
+                                    int *sb_width, float *angle)
+{
+    struct wm_private_data_t *priv = PRIV(device);
+    egc_point_t points[2];
+
+    if (angle && !sb_points) {
+        sb_points = points;
+    }
+
+    if (sb_points) {
+        for (int i = 0; i < 2; i++) {
+            egc_point_t p = priv->wiimote.ir_points_prev[i];
+            if (p.x & 0x8000) {
+                sb_points[i].x = p.x & 0x3ff;
+                sb_points[i].y = p.y;
+            } else {
+                sb_points[i].x = sb_points[i].y = -1;
+            }
+        }
+    }
+
+    if (sb_width) {
+        *sb_width = priv->wiimote.ir_bar_width_prev;
+    }
+
+    if (angle) {
+        *angle = compute_angle(sb_points[0], sb_points[1], NULL);
+    }
+}
+
 void egc_driver_wiimote_set_sideways(egc_input_device_t *device, bool held_sideways)
 {
     struct wm_private_data_t *priv = PRIV(device);
