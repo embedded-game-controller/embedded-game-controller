@@ -493,7 +493,9 @@ static int process_events(u32 timeout_us)
             }
 #if WITH_BLUETOOTH
             if (!found) {
-                bte_backend_wii_process_events();
+                int rc = bte_backend_wii_process_events();
+                if (rc > 0)
+                    count += rc;
             }
 #endif
         }
@@ -571,12 +573,18 @@ static int wii_report_input(egc_input_device_t *input_device, const egc_input_st
 
 static int wii_wait_events(u32 timeout_us)
 {
-    int events = _egc_gc_process_events(s_event_handler);
-    if (events > 0) {
+    int events = 0;
+    int rc = _egc_gc_process_events(s_event_handler);
+    if (rc > 0) {
         /* No need to wait */
         timeout_us = 0;
+        events += rc;
     }
-    return process_events(timeout_us);
+    rc = process_events(timeout_us);
+    if (rc > 0) {
+        events += rc;
+    }
+    return rc >= 0 ? events : rc;
 }
 
 const egc_platform_backend_t _egc_platform_backend = {
