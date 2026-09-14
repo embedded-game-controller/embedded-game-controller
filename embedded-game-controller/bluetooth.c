@@ -594,6 +594,17 @@ int _egc_bt_intr_transfer(egc_input_device_t *input_device, void *data, u16 len)
     return rc;
 }
 
+int _egc_bt_disconnect(egc_input_device_t *input_device)
+{
+    egc_bt_device_t *device = egc_bt_device_from_input(input_device);
+    if (!device || device->state != EGC_BT_STATE_CONNECTED)
+        return -1;
+
+    bte_l2cap_disconnect(device->s.connected.hid_intr);
+    bte_l2cap_disconnect(device->s.connected.hid_ctrl);
+    return 0;
+}
+
 void _egc_bt_on_initialized(egc_bt_initialized_cb callback)
 {
     add_ready_callback(callback);
@@ -660,6 +671,11 @@ const egc_usb_transfer_t *_egc_bt_ctrl_transfer(egc_input_device_t *device, u8 r
 }
 
 int _egc_bt_intr_transfer(egc_input_device_t *device, void *data, u16 length)
+{
+    return -ENOSYS;
+}
+
+void _egc_bt_disconnect(egc_input_device_t *device)
 {
     return -ENOSYS;
 }

@@ -10,6 +10,7 @@ const egc_usb_transfer_t *_egc_bt_ctrl_transfer(egc_input_device_t *device, u8 r
                                                 u16 length, egc_transfer_cb callback);
 
 int _egc_bt_intr_transfer(egc_input_device_t *device, void *data, u16 length);
+int _egc_bt_disconnect(egc_input_device_t *device);
 
 typedef struct bte_hci_t BteHci;
 typedef void (*egc_bt_initialized_cb)(BteHci *hci);

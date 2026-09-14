@@ -340,9 +340,6 @@ void egc_input_device_enable_accelerometer_default(bool enabled);
 void egc_input_device_enable_gyroscope_default(bool enabled);
 void egc_input_device_enable_touch_point_default(bool enabled);
 
-/* Note: suspending might not be supported by all backends */
-int egc_input_device_set_suspended(egc_input_device_t *device, bool suspended);
-
 /* Fetch events and invoke callbacks. */
 int egc_handle_events(void);
 /* Fetch events and invoke callbacks. Wait up to \a timeout_us microseconds for new events. */
