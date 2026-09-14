@@ -76,6 +76,26 @@ static void read_interrupts(egc_input_device_t *device)
     }
 }
 
+static int set_suspended(egc_input_device_t *device, bool suspended)
+{
+    if (device->suspended == suspended)
+        return 0;
+
+    int rc = -1;
+    if (device->connection == EGC_CONNECTION_USB) {
+        rc = _egc_platform_backend.usb.set_suspended
+                 ? _egc_platform_backend.usb.set_suspended(device, suspended)
+                 : -1;
+    } else if (device->connection == EGC_CONNECTION_BT) {
+        if (suspended) {
+            rc = _egc_bt_disconnect(device);
+        }
+    }
+    if (rc == 0)
+        device->suspended = suspended;
+    return rc;
+}
+
 /* API exposed to USB device drivers */
 void egc_device_driver_set_endpoints(egc_input_device_t *device, u8 endpoint_in, u8 interval_in,
                                      u8 endpoint_out, u8 interval_out)
@@ -392,46 +412,14 @@ void egc_device_driver_fill_desc(egc_device_description_t *desc, const u8 *eleme
 
 int egc_input_device_resume(egc_input_device_t *device)
 {
-    egc_device_priv_t *priv = get_priv(device);
-
     EGC_DEBUG("");
-
-    if (!device->suspended)
-        return 0;
-
-        /* FIXME: Doesn't work properly with DS3.
-         * It doesn't report any data after suspend+resume... */
-#if 0
-    if (usb_hid_v5_suspend_resume(device->host_fd, device->dev_id, 1, 0) != IOS_OK)
-        return IOS_ENOENT;
-#endif
-    device->suspended = false;
-
-    if (priv->driver->init) {
-        return priv->driver->init(device);
-    }
-
-    read_interrupts(device);
-    return 0;
+    return set_suspended(device, false);
 }
 
 int egc_input_device_suspend(egc_input_device_t *device)
 {
-    egc_device_priv_t *priv = get_priv(device);
-    int ret = 0;
-
     EGC_DEBUG("");
-
-    if (priv->driver->disconnect)
-        ret = priv->driver->disconnect(device);
-
-        /* Suspend the device */
-#if 0
-	usb_hid_v5_suspend_resume(device->host_fd, device->dev_id, 0, 0);
-#endif
-    device->suspended = true;
-
-    return ret;
+    return set_suspended(device, true);
 }
 
 int egc_input_device_set_leds(egc_input_device_t *device, u32 led_state)
@@ -596,16 +584,6 @@ void egc_input_device_enable_gyroscope_default(bool enabled)
 void egc_input_device_enable_touch_point_default(bool enabled)
 {
     _egc_enable_touch_point_default = enabled;
-}
-
-int egc_input_device_set_suspended(egc_input_device_t *device, bool suspended)
-{
-    if (device->connection == EGC_CONNECTION_USB) {
-        return _egc_platform_backend.usb.set_suspended
-                   ? _egc_platform_backend.usb.set_suspended(device, suspended)
-                   : -1;
-    }
-    return -1;
 }
 
 int egc_handle_events()
