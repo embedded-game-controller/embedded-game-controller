@@ -1812,6 +1812,9 @@ static void wm_driver_ops_intr_event(egc_input_device_t *device, const void *dat
 
     if (has_ir) {
         wm_ir_resolve(device, ir_points, &state);
+    } else {
+        egc_point_t invalid = { -1, -1 };
+        egc_device_driver_set_touch_point(device, &state, 0, invalid);
     }
 
     /* The Wiimote is rotated sideways: adjust the D-pad buttons and the
