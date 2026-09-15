@@ -957,11 +957,26 @@ static int wm_expansion_step(egc_input_device_t *device)
 static void wm_expansion_remove(egc_input_device_t *device)
 {
     struct wm_private_data_t *priv = PRIV(device);
+
+    /* But if we have the Motion+, and it was not removed, keep the gyro as
+     * available */
+    bool was_mp = priv->exp_type == EGC_WIIMOTE_EXP_MOTION_PLUS;
+    if (was_mp) {
+        /* We'll need to figure out if the Motion+ has been physically removed,
+         * or just disabled. */
+        priv->motion_plus_probed = false;
+        priv->exp_motion_plus = false;
+        EGC_DEBUG("Motion+ maybe removed?");
+    }
+
     priv->exp_ready = false;
     priv->exp_type = EGC_WIIMOTE_EXP_NONE;
     /* Return to the description of the lone wiimote */
-    memcpy((struct egc_device_description_t *)device->desc, &s_device_description_wiimote,
-           sizeof(s_device_description_wiimote));
+    struct egc_device_description_t *desc = (struct egc_device_description_t *)device->desc;
+    memcpy(desc, &s_device_description_wiimote, sizeof(s_device_description_wiimote));
+    if (priv->exp_motion_plus) {
+        desc->num_gyroscopes = 1;
+    }
 }
 
 static s16 wm_rotation_value(s16 raw, bool slow)
@@ -1251,6 +1266,12 @@ static void wm_expansion_setup(egc_input_device_t *device)
     struct wm_private_data_t *priv = PRIV(device);
     egc_device_description_t *desc = (egc_device_description_t *)device->desc;
 
+    /* By default, if an expansion is connected, make it impossible to
+     * re-enabled the Motion+) */
+    if (priv->exp_type != EGC_WIIMOTE_EXP_NONE) {
+        desc->num_gyroscopes = 0;
+    }
+
     /* Here we setup the default calibration and update the device description */
     if (priv->exp_type == EGC_WIIMOTE_EXP_NUNCHUCK) {
         struct wm_exp_cal_nunchuck_t *cal = &priv->wiimote.exp_cal.nunchuck;
@@ -1455,8 +1476,8 @@ static int wm_step(egc_input_device_t *device)
                 if (!priv->exp_attached) {
                     /* If we disconnected an expansion and we have the Motion+,
                      * re-enable it */
-                    bool enable_mp =
-                        priv->exp_motion_plus && priv->exp_type != EGC_WIIMOTE_EXP_MOTION_PLUS;
+                    bool was_mp = priv->exp_type == EGC_WIIMOTE_EXP_MOTION_PLUS;
+                    bool enable_mp = priv->exp_motion_plus && !was_mp;
 
                     wm_expansion_remove(device);
                     priv->state = enable_mp ? WM_STATE_MP_INITIALIZING : WM_STATE_REPORT_REQ;
@@ -1470,7 +1491,9 @@ static int wm_step(egc_input_device_t *device)
                 /* Wiibrew wiki says official games try up to three times. */
                 priv->remaining_attempts = 3;
                 priv->state = WM_STATE_MP_FIRST;
-            } else if (priv->exp_type == EGC_WIIMOTE_EXP_NONE && priv->exp_motion_plus &&
+            } else if ((priv->exp_type == EGC_WIIMOTE_EXP_NONE ||
+                        priv->exp_type == EGC_WIIMOTE_EXP_MOTION_PLUS) &&
+                       priv->exp_motion_plus &&
                        priv->motion_plus_enabled != priv->motion_plus_requested) {
                 priv->remaining_attempts = 3;
                 priv->state =
@@ -1511,6 +1534,9 @@ static void wm_step_next(egc_input_device_t *device)
     if (priv->state == WM_STATE_IR_ENABLE_LOGIC && !priv->ir_requested) {
         priv->state = WM_STATE_IDLE;
         wm_request_status(device);
+    } else if (priv->state == WM_STATE_MP_INITIALIZING) {
+        priv->state = priv->exp_motion_plus && priv->motion_plus_requested ? WM_STATE_MP_ENABLING
+                                                                           : WM_STATE_MP_DISABLING1;
     } else if (priv->state == WM_STATE_MP_ENABLING) {
         priv->state = WM_STATE_IDLE;
     } else if ((priv->state >= WM_STATE_IR_FIRST && priv->state < WM_STATE_IR_LAST) ||
@@ -1610,7 +1636,14 @@ static void wm_read_cb(egc_input_device_t *device, const u8 *data, u8 actual_len
         }
         priv->exp_ready = true;
     } else if (priv->state == WM_STATE_MP_PROBE) {
-        priv->exp_motion_plus = data[1] == 0x5;
+        egc_device_description_t *desc = (egc_device_description_t *)device->desc;
+        if (data[1] == 0x5) {
+            priv->exp_motion_plus = true;
+            desc->num_gyroscopes = 1;
+        } else {
+            priv->exp_motion_plus = false;
+            desc->num_gyroscopes = 0;
+        }
         priv->motion_plus_probed = true;
     }
 
