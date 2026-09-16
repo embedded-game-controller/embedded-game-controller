@@ -1660,6 +1660,7 @@ static void wm_status_cb(egc_input_device_t *device, const u8 *data)
     u8 status = data[2];
     bool battery_critical = status & WM_STATUS_BATTERY_CRITICAL;
     egc_device_driver_set_battery_critical(device, battery_critical);
+    egc_device_driver_set_battery_level(device, data[5]);
 
     /* The Wii U Pro controller reports the leds to be 0x1 as soon as it
      * connects, even though the leds are still all blinking. Therefore, ignore
