@@ -189,6 +189,11 @@ static inline void egc_device_driver_set_battery_critical(egc_input_device_t *de
     device->battery_critical = critical;
 }
 
+static inline void egc_device_driver_set_battery_level(egc_input_device_t *device, u8 level)
+{
+    device->battery_level = level;
+}
+
 extern bool _egc_enable_accelerometer_default;
 extern bool _egc_enable_gyroscope_default;
 extern bool _egc_enable_touch_point_default;

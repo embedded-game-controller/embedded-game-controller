@@ -219,11 +219,14 @@ typedef struct egc_device_description_t {
 struct egc_input_device_t {
     const egc_device_description_t *desc;
     egc_input_state_t state ATTRIBUTE_ALIGN(4);
-    egc_connection_e connection;
+    egc_connection_e connection : 4;
     bool suspended : 1;
     bool battery_critical : 1;
-    u8 unused : 6;
+    u8 unused : 2;
+
+    u8 battery_level; /* 255 = full */
 } ATTRIBUTE_PACKED ATTRIBUTE_ALIGN(8);
+static_assert(sizeof(void *) != 4 || sizeof(struct egc_input_device_t) == 48);
 
 typedef void (*egc_input_device_cb)(egc_input_device_t *device, void *userdata);
 
@@ -323,6 +326,11 @@ static inline egc_point_t egc_input_device_read_touch_point(egc_input_device_t *
 static inline bool egc_input_device_is_battery_critical(egc_input_device_t *device)
 {
     return device->battery_critical;
+}
+
+static inline u8 egc_input_device_get_battery_level(egc_input_device_t *device)
+{
+    return device->battery_level;
 }
 
 /* Functions to enable/disable sensor features. The initial status of these
