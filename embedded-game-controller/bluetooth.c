@@ -25,10 +25,6 @@
 #define EGC_BT_MAX_DEVICES 7
 #endif
 
-#define BD_ADDR_FMT "%02x:%02x:%02x:%02x:%02x:%02x"
-#define BD_ADDR_DATA(b)                                                                            \
-    (b)->bytes[5], (b)->bytes[4], (b)->bytes[3], (b)->bytes[2], (b)->bytes[1], (b)->bytes[0]
-
 enum {
     EGC_BT_STATE_UNUSED = 0,
     EGC_BT_STATE_INQUIRY,
@@ -400,8 +396,8 @@ static void inquiry_cb(BteHci *hci, const BteHciInquiryReply *reply, void *)
 {
     for (int i = 0; i < reply->num_responses; i++) {
         const BteHciInquiryResponse *r = &reply->responses[i];
-        EGC_DEBUG("Device " BD_ADDR_FMT ", service class %d, major %d, minor %d",
-                  BD_ADDR_DATA(&r->address), bte_cod_get_service_class(r->class_of_device),
+        EGC_DEBUG("Device " EGC_BT_ADDRESS_FMT ", service class %d, major %d, minor %d",
+                  EGC_BT_ADDRESS_DATA(&r->address), bte_cod_get_service_class(r->class_of_device),
                   bte_cod_get_major_dev_class(r->class_of_device),
                   bte_cod_get_minor_dev_class(r->class_of_device));
         if (bte_cod_get_major_dev_class(r->class_of_device) != BTE_COD_MAJOR_DEV_CLASS_PERIPH) {
@@ -503,7 +499,7 @@ static void incoming_ctrl_connected_cb(BteL2capServer *l2cap_server, BteL2cap *l
                                        void *userdata)
 {
     const BteBdAddr *address = bte_l2cap_get_address(l2cap);
-    EGC_DEBUG("from " BD_ADDR_FMT, BD_ADDR_DATA(address));
+    EGC_DEBUG("from " EGC_BT_ADDRESS_FMT, EGC_BT_ADDRESS_DATA(address));
     egc_bt_device_t *device = bt_device_alloc(address);
     if (!device) {
         return;
@@ -657,6 +653,15 @@ int egc_bt_leave_page_mode()
     return 0;
 }
 
+int egc_bt_device_get_address(egc_input_device_t *input_device, egc_bt_address_t *address)
+{
+    egc_bt_device_t *device = egc_bt_device_from_input(input_device);
+    if (!device || device->state != EGC_BT_STATE_CONNECTED)
+        return -EINVAL;
+    memcpy(address, device_get_address(device), sizeof(*address));
+    return 0;
+}
+
 #else /* !WITH_BLUETOOTH */
 
 #include <errno.h>
@@ -696,6 +701,11 @@ int egc_bt_enter_page_mode()
 }
 
 int egc_bt_leave_page_mode()
+{
+    return -ENOSYS;
+}
+
+int egc_bt_device_get_address(egc_input_device_t *device, egc_bt_address_t *address)
 {
     return -ENOSYS;
 }
