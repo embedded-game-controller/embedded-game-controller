@@ -3,6 +3,7 @@
 
 #include <assert.h>
 #include <stdarg.h>
+#include <string.h>
 
 #include "egc_types.h"
 
@@ -228,6 +229,23 @@ struct egc_input_device_t {
 } ATTRIBUTE_PACKED ATTRIBUTE_ALIGN(8);
 static_assert(sizeof(void *) != 4 || sizeof(struct egc_input_device_t) == 48);
 
+/* Note: the BD_ADDR bytes are stored in reversed order inside this structure.
+ * Use the EGC_BT_ADDRESS_DATA macro to get the individual bytes in the
+ * human-expected order. */
+typedef struct egc_bt_address_t {
+    u8 b[6];
+} egc_bt_address_t;
+#define EGC_BT_ADDRESS_FMT "%02x:%02x:%02x:%02x:%02x:%02x"
+#define EGC_BT_ADDRESS_DATA(b)                                                                     \
+    (b)->bytes[5], (b)->bytes[4], (b)->bytes[3], (b)->bytes[2], (b)->bytes[1], (b)->bytes[0]
+#define EGC_BT_ADDRESS_DATA_REVERSED(b)                                                            \
+    (b)->bytes[0], (b)->bytes[1], (b)->bytes[2], (b)->bytes[3], (b)->bytes[4], (b)->bytes[5]
+
+static inline int egc_bt_address_cmp(const egc_bt_address_t *a, const egc_bt_address_t *b)
+{
+    return memcmp(a, b, sizeof(*a));
+}
+
 typedef void (*egc_input_device_cb)(egc_input_device_t *device, void *userdata);
 
 int egc_initialize(egc_input_device_cb added_cb, egc_input_device_cb removed_cb, void *userdata);
@@ -358,5 +376,7 @@ int egc_bt_stop_scan();
 
 int egc_bt_enter_page_mode();
 int egc_bt_leave_page_mode();
+
+int egc_bt_device_get_address(egc_input_device_t *device, egc_bt_address_t *address);
 
 #endif
