@@ -68,6 +68,8 @@ static BtePacketType s_packet_types;
 static BteL2capServer *s_l2cap_server_hid_ctrl;
 static BteL2capServer *s_l2cap_server_hid_intr;
 
+static EgcBtConnectionCb s_connection_cb;
+
 static egc_bt_initialized_cb s_ready_callbacks[MAX_READY_CB];
 static u8 s_ready_callbacks_count = 0;
 
@@ -409,6 +411,21 @@ static void inquiry_cb(BteHci *hci, const BteHciInquiryReply *reply, void *)
             continue;
         }
 
+        BteL2CapConnectFlags flags = BTE_L2CAP_CONNECT_FLAG_NONE;
+        if (s_connection_cb) {
+            bool is_incoming = false;
+            egc_bt_connection_reply_e reply =
+                s_connection_cb((const egc_bt_address_t *)&r->address,
+                                bte_cod_get_service_class(r->class_of_device),
+                                bte_cod_get_major_dev_class(r->class_of_device),
+                                bte_cod_get_minor_dev_class(r->class_of_device), is_incoming,
+                                _egc_callbacks_userdata);
+            if (reply == EGC_BT_CONNECTION_REPLY_REFUSE)
+                continue;
+            if (reply == EGC_BT_CONNECTION_REPLY_REQ_AUTH)
+                flags |= BTE_L2CAP_CONNECT_FLAG_AUTH;
+        }
+
         egc_bt_device_t *device = bt_device_alloc(&r->address);
         if (!device) {
             EGC_DEBUG("No more BT slots available");
@@ -420,8 +437,8 @@ static void inquiry_cb(BteHci *hci, const BteHciInquiryReply *reply, void *)
         params.clock_offset = r->clock_offset;
         params.page_scan_rep_mode = r->page_scan_rep_mode;
         params.allow_role_switch = true;
-        bte_l2cap_new_configured(s_client, &r->address, BTE_L2CAP_PSM_SDP, &params,
-                                 BTE_L2CAP_CONNECT_FLAG_NONE, NULL, sdp_connect_cb, device);
+        bte_l2cap_new_configured(s_client, &r->address, BTE_L2CAP_PSM_SDP, &params, flags, NULL,
+                                 sdp_connect_cb, device);
     }
 }
 
@@ -530,7 +547,17 @@ static void incoming_intr_connected_cb(BteL2capServer *l2cap_server, BteL2cap *l
 static bool connection_request_cb(BteL2capServer *l2cap_server, const BteBdAddr *address,
                                   const BteClassOfDevice *cod, void *userdata)
 {
-    /* Maybe TODO: let the client decide? */
+    if (s_connection_cb) {
+        bool is_incoming = true;
+        egc_bt_connection_reply_e reply =
+            s_connection_cb((const egc_bt_address_t *)address, bte_cod_get_service_class(*cod),
+                            bte_cod_get_major_dev_class(*cod), bte_cod_get_minor_dev_class(*cod),
+                            is_incoming, _egc_callbacks_userdata);
+        if (reply == EGC_BT_CONNECTION_REPLY_REFUSE)
+            return false;
+
+        bte_l2cap_server_set_needs_auth(l2cap_server, reply == EGC_BT_CONNECTION_REPLY_REQ_AUTH);
+    }
     return true;
 }
 
@@ -662,6 +689,11 @@ int egc_bt_device_get_address(egc_input_device_t *input_device, egc_bt_address_t
     return 0;
 }
 
+void egc_bt_set_connection_filter(EgcBtConnectionCb callback)
+{
+    s_connection_cb = callback;
+}
+
 #else /* !WITH_BLUETOOTH */
 
 #include <errno.h>
@@ -708,6 +740,10 @@ int egc_bt_leave_page_mode()
 int egc_bt_device_get_address(egc_input_device_t *device, egc_bt_address_t *address)
 {
     return -ENOSYS;
+}
+
+void egc_bt_set_connection_filter(EgcBtConnectionCb callback, void *userdata)
+{
 }
 
 #endif /* WITH_BLUETOOTH */

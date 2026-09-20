@@ -35,7 +35,7 @@ bool _egc_enable_touch_point_default = true;
 
 static egc_input_device_cb s_device_added_cb = NULL;
 static egc_input_device_cb s_device_removed_cb = NULL;
-static void *s_callbacks_userdata = NULL;
+void *_egc_callbacks_userdata = NULL;
 
 static void read_interrupts(egc_input_device_t *device);
 
@@ -464,7 +464,7 @@ static int on_device_added(egc_input_device_t *device, u16 vid, u16 pid)
 
     /* Inform the client */
     if (s_device_added_cb)
-        s_device_added_cb(device, s_callbacks_userdata);
+        s_device_added_cb(device, _egc_callbacks_userdata);
     return 0;
 }
 
@@ -475,7 +475,7 @@ static int on_device_removed(egc_input_device_t *device)
 
     /* Inform the client */
     if (s_device_removed_cb)
-        s_device_removed_cb(device, s_callbacks_userdata);
+        s_device_removed_cb(device, _egc_callbacks_userdata);
 
     if (priv->driver && priv->driver->disconnect)
         rc = priv->driver->disconnect(device);
@@ -517,7 +517,7 @@ int egc_initialize(egc_input_device_cb added_cb, egc_input_device_cb removed_cb,
 {
     s_device_added_cb = added_cb;
     s_device_removed_cb = removed_cb;
-    s_callbacks_userdata = userdata;
+    _egc_callbacks_userdata = userdata;
     int rc = _egc_platform_backend.init(event_handler);
     if (rc < 0)
         return rc;

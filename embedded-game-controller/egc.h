@@ -233,7 +233,7 @@ static_assert(sizeof(void *) != 4 || sizeof(struct egc_input_device_t) == 48);
  * Use the EGC_BT_ADDRESS_DATA macro to get the individual bytes in the
  * human-expected order. */
 typedef struct egc_bt_address_t {
-    u8 b[6];
+    u8 bytes[6];
 } egc_bt_address_t;
 #define EGC_BT_ADDRESS_FMT "%02x:%02x:%02x:%02x:%02x:%02x"
 #define EGC_BT_ADDRESS_DATA(b)                                                                     \
@@ -378,5 +378,21 @@ int egc_bt_enter_page_mode();
 int egc_bt_leave_page_mode();
 
 int egc_bt_device_get_address(egc_input_device_t *device, egc_bt_address_t *address);
+
+typedef enum {
+    EGC_BT_CONNECTION_REPLY_REFUSE = 0,
+    EGC_BT_CONNECTION_REPLY_ACCEPT,
+    EGC_BT_CONNECTION_REPLY_REQ_AUTH,
+} egc_bt_connection_reply_e;
+
+/**
+ * Called when a connection is about to be established.
+ */
+typedef egc_bt_connection_reply_e (*EgcBtConnectionCb)(const egc_bt_address_t *address,
+                                                       u16 service_class, u8 device_class_major,
+                                                       u8 device_class_minor, bool is_incoming,
+                                                       void *userdata);
+
+void egc_bt_set_connection_filter(EgcBtConnectionCb callback);
 
 #endif

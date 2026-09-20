@@ -24,6 +24,7 @@ typedef struct {
 } egc_device_priv_t;
 
 extern bool _egc_sensor_bar_position_top;
+extern void *_egc_callbacks_userdata;
 
 static inline egc_device_priv_t *get_priv(egc_input_device_t *pub)
 {
