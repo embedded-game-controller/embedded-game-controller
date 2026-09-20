@@ -384,4 +384,20 @@ int egc_bt_device_get_disconnection_reason(egc_input_device_t *device);
 
 int egc_bt_get_local_address(egc_bt_address_t *address);
 
+typedef enum {
+    EGC_BT_CONNECTION_REPLY_REFUSE = 0,
+    EGC_BT_CONNECTION_REPLY_ACCEPT,
+    EGC_BT_CONNECTION_REPLY_REQ_AUTH,
+} egc_bt_connection_reply_e;
+
+/**
+ * Called when a connection is about to be established.
+ */
+typedef egc_bt_connection_reply_e (*EgcBtConnectionCb)(const egc_bt_address_t *address,
+                                                       u16 service_class, u8 device_class_major,
+                                                       u8 device_class_minor, bool is_incoming,
+                                                       void *userdata);
+
+void egc_bt_set_connection_filter(EgcBtConnectionCb callback);
+
 #endif
