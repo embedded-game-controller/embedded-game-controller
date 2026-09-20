@@ -41,6 +41,7 @@ extern egc_audio_device_t *_egc_audio_devices;
 egc_audio_device_t *_egc_input_device_get_audio(egc_input_device_t *device);
 
 extern bool _egc_sensor_bar_position_top;
+extern void *_egc_callbacks_userdata;
 
 static inline egc_device_priv_t *get_priv(egc_input_device_t *pub)
 {
