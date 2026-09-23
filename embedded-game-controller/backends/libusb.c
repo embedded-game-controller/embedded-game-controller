@@ -121,6 +121,7 @@ static void transfer_cb(struct libusb_transfer *transfer)
     }
     if (t->callback)
         t->callback(&t->t);
+    libusb_free_transfer(t->usb);
     free(t);
 }
 
