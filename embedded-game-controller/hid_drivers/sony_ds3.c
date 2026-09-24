@@ -1,8 +1,9 @@
 #include "driver_api.h"
 #include "utils.h"
 
-/* Resource:
- * https://web.archive.org/web/20150227021757/http://www.circuitsathome.com/mcu/programming/ps3-and-wiimote-game-controllers-on-the-arduino-host-shield-part-2
+/* Resources:
+ * - https://github.com/xerpi/libsicksaxis
+ * - https://web.archive.org/web/20150227021757/http://www.circuitsathome.com/mcu/programming/ps3-and-wiimote-game-controllers-on-the-arduino-host-shield-part-2
  */
 
 #define SONY_VID 0x054c
@@ -225,26 +226,21 @@ static void ds3_get_report_cb(egc_usb_transfer_t *transfer)
 
 static int ds3_request_data(egc_input_device_t *device)
 {
-#if 0
-    char buf[49] = { 0x01, 0 };
-    const egc_usb_transfer_t *transfer = egc_device_driver_issue_ctrl_transfer_async(
-        device, EGC_USB_REQTYPE_INTERFACE_GET, EGC_USB_REQ_GETREPORT,
-        (EGC_USB_REPTYPE_INPUT << 8) | 0x01, 0, buf, sizeof(buf), ds3_get_report_cb);
-#else
     const egc_usb_transfer_t *transfer = egc_device_driver_issue_intr_transfer_async(
         device, EGC_USB_ENDPOINT_IN | 1, NULL, sizeof(struct ds3_input_report), ds3_get_report_cb);
-#endif
-    EGC_DEBUG("Got transfer %p", transfer);
     return transfer != NULL ? 0 : -1;
 }
 
 static int ds3_step(egc_input_device_t *device);
 
-static void ds3_request_report_cb(egc_usb_transfer_t *transfer)
+static void ds3_generic_step_cb(egc_usb_transfer_t *transfer)
 {
     egc_input_device_t *device = transfer->device;
-    EGC_DEBUG("status %d", transfer->status);
-    EGC_DEBUG_DATA(transfer->data, transfer->length);
+    if (transfer->status == EGC_USB_TRANSFER_STATUS_COMPLETED) {
+        EGC_DEBUG_DATA(transfer->data, transfer->length);
+    } else {
+        EGC_DEBUG("status %d", transfer->status);
+    }
     ds3_step(device);
 }
 
@@ -253,32 +249,42 @@ static int ds3_request_report(egc_input_device_t *device)
     char buf[49] = { 0x01, 0 };
     const egc_usb_transfer_t *transfer = egc_device_driver_issue_ctrl_transfer_async(
         device, EGC_USB_REQTYPE_INTERFACE_GET, EGC_USB_REQ_GETREPORT,
-        (EGC_USB_REPTYPE_INPUT << 8) | 0x01, 0, buf, sizeof(buf), ds3_request_report_cb);
-    EGC_DEBUG("Got transfer %p", transfer);
+        (EGC_USB_REPTYPE_INPUT << 8) | 0x01, 0, buf, sizeof(buf), ds3_generic_step_cb);
     return transfer != NULL ? 0 : -1;
-}
-
-static void ds3_send_usb_interrupt_cb(egc_usb_transfer_t *transfer)
-{
-    egc_input_device_t *device = transfer->device;
-    EGC_DEBUG("status %d", transfer->status);
-    EGC_DEBUG_DATA(transfer->data, transfer->length);
-    ds3_step(device);
 }
 
 static int ds3_send_usb_interrupt(egc_input_device_t *device)
 {
     const egc_usb_transfer_t *transfer = egc_device_driver_issue_intr_transfer_async(
         device, EGC_USB_ENDPOINT_OUT | 2, s_output_report, sizeof(s_output_report),
-        ds3_send_usb_interrupt_cb);
+        ds3_generic_step_cb);
+    return transfer != NULL ? 0 : -1;
+}
+
+static inline int ds3_write_host_address(egc_input_device_t *device,
+                                         egc_bt_address_t *address)
+{
+    char buf[] = {
+        0x01, 0x00, EGC_BT_ADDRESS_DATA(address)
+    };
+    const egc_usb_transfer_t *transfer = egc_device_driver_issue_ctrl_transfer_async(
+        device, EGC_USB_REQTYPE_INTERFACE_SET, EGC_USB_REQ_SETREPORT,
+        (EGC_USB_REPTYPE_FEATURE << 8) | 0xf5, 0, buf, sizeof(buf), ds3_read_stored_host_address_cb);
     return transfer != NULL ? 0 : -1;
 }
 
 static void ds3_read_stored_host_address_cb(egc_usb_transfer_t *transfer)
 {
     egc_input_device_t *device = transfer->device;
-    EGC_DEBUG("status %d", transfer->status);
-    EGC_DEBUG_DATA(transfer->data, transfer->length);
+    if (transfer->status == EGC_USB_TRANSFER_STATUS_COMPLETED) {
+        EGC_DEBUG_DATA(transfer->data, transfer->length);
+#if WITH_BLUETOOTH
+        /* Compare the host address, and update it if different */
+        // TODO
+#endif
+    } else {
+        EGC_DEBUG("status %d", transfer->status);
+    }
     ds3_step(device);
 }
 
@@ -291,56 +297,29 @@ static int ds3_read_stored_host_address(egc_input_device_t *device)
     return transfer != NULL ? 0 : -1;
 }
 
-static void ds3_set_operational_cb(egc_usb_transfer_t *transfer)
+static int ds3_set_operational_usb(egc_input_device_t *device)
 {
-    egc_input_device_t *device = transfer->device;
-    EGC_DEBUG("status %d", transfer->status);
-    EGC_DEBUG_DATA(transfer->data, transfer->length);
-    ds3_step(device);
-}
-
-static int ds3_set_operational(egc_input_device_t *device)
-{
-    char buf[] = { 0x42, 0x0c, 0x00, 0x00,
-        /*
-        0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00,
-        0x00,*/
-    };
+    char buf[] = { 0x42, 0x0c, 0x00, 0x00, };
     const egc_usb_transfer_t *transfer = egc_device_driver_issue_ctrl_transfer_async(
         device, EGC_USB_REQTYPE_INTERFACE_SET, EGC_USB_REQ_SETREPORT,
-        (EGC_USB_REPTYPE_FEATURE << 8) | 0xf4, 0, buf, sizeof(buf), ds3_set_operational_cb);
+        (EGC_USB_REPTYPE_FEATURE << 8) | 0xf4, 0, buf, sizeof(buf), ds3_generic_step_cb);
     return transfer != NULL ? 0 : -1;
-}
-
-static void ds3_read_bd_addr_cb(egc_usb_transfer_t *transfer)
-{
-    egc_input_device_t *device = transfer->device;
-    if (transfer->status == EGC_USB_TRANSFER_STATUS_COMPLETED) {
-        /* There's the controller's MAC BT address at offset 4 */
-        EGC_DEBUG_DATA(transfer->data, transfer->length);
-    } else {
-        EGC_DEBUG("status %d", transfer->status);
-    }
-    ds3_step(device);
 }
 
 static int ds3_read_bd_addr(egc_input_device_t *device)
 {
-    EGC_DEBUG("");
     char buf[17];
     const egc_usb_transfer_t *transfer = egc_device_driver_issue_ctrl_transfer_async(
         device, EGC_USB_REQTYPE_INTERFACE_GET, EGC_USB_REQ_GETREPORT,
-        (EGC_USB_REPTYPE_FEATURE << 8) | 0xf2, 0, buf, sizeof(buf), ds3_read_bd_addr_cb);
+        (EGC_USB_REPTYPE_FEATURE << 8) | 0xf2, 0, buf, sizeof(buf), ds3_generic_step_cb);
     return transfer != NULL ? 0 : -1;
 }
 
 typedef int (*ds3_step_function)(egc_input_device_t *device);
 
-static ds3_step_function s_step_functions[] = {
+static const ds3_step_function s_usb_step_functions[] = {
     ds3_read_bd_addr,
-    ds3_set_operational,
+    ds3_set_operational_usb,
     ds3_read_stored_host_address,
     ds3_send_usb_interrupt,
     ds3_request_report,
@@ -348,11 +327,30 @@ static ds3_step_function s_step_functions[] = {
     NULL,
 };
 
+#if WITH_BLUETOOTH
+static const ds3_step_function s_bt_step_functions[] = {
+    ds3_read_bd_addr,
+    ds3_set_operational_bt,
+    ds3_read_stored_host_address,
+    ds3_request_data,
+    NULL,
+};
+#endif
+
 static int ds3_step(egc_input_device_t *device)
 {
     struct ds3_private_data_t *priv = PRIV(device);
     EGC_DEBUG("step %d", priv->step);
-    ds3_step_function func = s_step_functions[priv->step++];
+
+    const ds3_step_function *functions;
+    if (device->connection == EGC_CONNECTION_USB) {
+        functions = s_usb_step_functions;
+#if WITH_BLUETOOTH
+    } else if (device->connection == EGC_CONNECTION_BT) {
+        functions = s_bt_step_functions;
+#endif
+    }
+    ds3_step_function func = functions[priv->step++];
     return func ? func(device) : 0;
 }
 
