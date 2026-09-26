@@ -55,11 +55,12 @@ typedef struct {
 } egc_bt_device_t;
 
 /* We can have at most these initialization callbacks
+ * - Read stored link keys
  * - Starting the inquiry
  * - Setting up the L2CAP server
  * - Platform backend registering a vendor callback (Wii)
  */
-#define MAX_READY_CB 3
+#define MAX_READY_CB 4
 
 static egc_bt_device_t s_bt_devices[EGC_BT_MAX_DEVICES];
 static BteClient *s_client;
@@ -68,10 +69,32 @@ static BtePacketType s_packet_types;
 static BteL2capServer *s_l2cap_server_hid_ctrl;
 static BteL2capServer *s_l2cap_server_hid_intr;
 
+static egc_bt_stored_link_key_t *s_stored_link_keys;
+static u8 s_stored_link_keys_max;
+static u8 s_stored_link_keys_oldest;         /* Assume it's the one in slot 0, initially */
+static u8 s_stored_link_keys_max_ctrl = 255; /* Controller limit, read at init */
+static_assert(sizeof(egc_bt_stored_link_key_t) == sizeof(BteHciStoredLinkKey));
+
 static EgcBtConnectionCb s_connection_cb;
+static EgcBtAuthDataRequestedCb s_link_key_requested_cb;
+static EgcBtAuthDataRequestedCb s_pin_code_requested_cb;
+static EgcBtLinkKeyReceivedCb s_link_key_received_cb;
 
 static egc_bt_initialized_cb s_ready_callbacks[MAX_READY_CB];
 static u8 s_ready_callbacks_count = 0;
+
+static bool mem_is_zero(const void *data, size_t size)
+{
+    const u8 *bytes = data;
+    bool is_zero = true;
+    for (int i = 0; i < size; i++) {
+        if (bytes[i] != 0) {
+            is_zero = false;
+            break;
+        }
+    }
+    return is_zero;
+}
 
 static const BteBdAddr *device_get_address(const egc_bt_device_t *device)
 {
@@ -422,6 +445,12 @@ static void inquiry_cb(BteHci *hci, const BteHciInquiryReply *reply, void *)
                                 _egc_callbacks_userdata);
             if (reply == EGC_BT_CONNECTION_REPLY_REFUSE)
                 continue;
+            /* TODO: once
+             * https://github.com/embedded-game-controller/bt-embedded/issues/10
+             * is fixed, it's probably better to request authentication after
+             * the SDP connection has been established. And maybe the decision
+             * on whether authentication is needed should be taken by the HID
+             * driver. */
             if (reply == EGC_BT_CONNECTION_REPLY_REQ_AUTH)
                 flags |= BTE_L2CAP_CONNECT_FLAG_AUTH;
         }
@@ -474,6 +503,28 @@ static void remove_ready_callback(egc_bt_initialized_cb callback)
     }
     if (dest_index >= 0) {
         s_ready_callbacks_count--;
+    }
+}
+
+static void read_stored_link_key_cb(BteHci *hci, const BteHciReadStoredLinkKeyReply *reply,
+                                    void *userdata)
+{
+    EGC_DEBUG("Stored keys: %d, max %d (status %d)", reply->num_keys, reply->max_keys,
+              reply->status);
+    if (reply->status != 0)
+        return;
+
+    s_stored_link_keys_max_ctrl = reply->max_keys;
+    int count = reply->num_keys;
+    if (count > s_stored_link_keys_max)
+        count = s_stored_link_keys_max;
+    memcpy(s_stored_link_keys, reply->stored_keys, sizeof(egc_bt_stored_link_key_t) * count);
+}
+
+static void read_stored_link_keys(BteHci *hci)
+{
+    if (s_stored_link_keys) {
+        bte_hci_read_stored_link_key(hci, NULL, read_stored_link_key_cb, NULL);
     }
 }
 
@@ -579,6 +630,75 @@ static void enter_page_mode(BteHci *hci)
      * ACL connection is always received on the BteL2capServer handling the
      * control connection. */
     bte_l2cap_server_on_connection_request(s_l2cap_server_hid_intr, decline_connection, NULL);
+}
+
+static bool on_link_key_requested(BteHci *hci, const BteBdAddr *address, void *userdata)
+{
+    EGC_DEBUG("address: " EGC_BT_ADDRESS_FMT, EGC_BT_ADDRESS_DATA((egc_bt_address_t *)address));
+    egc_bt_device_t *device = device_by_address(address);
+    if (!device) {
+        /* Not one of our devices: ignore */
+        return false;
+    }
+
+    if (s_stored_link_keys) {
+        /* If we have the key, use it. This code seems to be triggered only on
+         * the Wii (and probably on other machines where the host BT version is
+         * ancient); on modern BT controllers, the keys are handed out
+         * automatically. However I've not being able to find out in which BT
+         * version this changed (probably 2.1, since that's the version which
+         * makes it impossible to read the link keys out of a controller). */
+        for (int i = 0; i < s_stored_link_keys_max; i++) {
+            egc_bt_stored_link_key_t *r = &s_stored_link_keys[i];
+            if (egc_bt_address_cmp((egc_bt_address_t *)address, &r->address) == 0 &&
+                !mem_is_zero(&r->key, sizeof(r->key))) {
+                bte_hci_link_key_req_reply(hci, address, (BteLinkKey *)&r->key, NULL, NULL);
+                return true;
+            }
+        }
+    }
+
+    if (s_link_key_requested_cb) {
+        s_link_key_requested_cb((egc_bt_address_t *)address, _egc_callbacks_userdata);
+        return true;
+    } else {
+        return false;
+    }
+}
+
+static bool on_link_key_received(BteHci *hci, const BteHciLinkKeyNotificationData *data,
+                                 void *userdata)
+{
+    EGC_DEBUG("address: " EGC_BT_ADDRESS_FMT ", type %d",
+              EGC_BT_ADDRESS_DATA((egc_bt_address_t *)&data->address), data->key_type);
+    egc_bt_device_t *device = device_by_address(&data->address);
+    if (!device) {
+        /* Not one of our devices: ignore */
+        return false;
+    }
+
+    if (s_link_key_received_cb) {
+        s_link_key_received_cb((egc_bt_address_t *)&data->address, (egc_bt_link_key_t *)&data->key,
+                               _egc_callbacks_userdata);
+    }
+    return true;
+}
+
+static bool on_pin_code_requested(BteHci *hci, const BteBdAddr *address, void *userdata)
+{
+    EGC_DEBUG("address: " EGC_BT_ADDRESS_FMT, EGC_BT_ADDRESS_DATA((egc_bt_address_t *)address));
+    egc_bt_device_t *device = device_by_address(address);
+    if (!device) {
+        /* Not one of our devices: ignore */
+        return false;
+    }
+
+    if (s_pin_code_requested_cb) {
+        s_pin_code_requested_cb((egc_bt_address_t *)address, _egc_callbacks_userdata);
+        return true;
+    } else {
+        return false;
+    }
 }
 
 int _egc_bt_initialize()
@@ -689,9 +809,115 @@ int egc_bt_device_get_address(egc_input_device_t *input_device, egc_bt_address_t
     return 0;
 }
 
+int egc_bt_get_local_address(egc_bt_address_t *address)
+{
+    BteHci *hci = bte_hci_get(s_client);
+    bool ok = bte_hci_get_bd_address(hci, (BteBdAddr *)address);
+    return ok ? 0 : -1;
+}
+
 void egc_bt_set_connection_filter(EgcBtConnectionCb callback)
 {
     s_connection_cb = callback;
+}
+
+void egc_bt_on_link_key_requested(EgcBtAuthDataRequestedCb callback)
+{
+    s_link_key_requested_cb = callback;
+    BteHci *hci = bte_hci_get(s_client);
+    bte_hci_on_link_key_request(hci, on_link_key_requested);
+}
+
+void egc_bt_send_link_key(const egc_bt_address_t *address, const u8 *link_key)
+{
+    BteHci *hci = bte_hci_get(s_client);
+    if (link_key) {
+        bte_hci_link_key_req_reply(hci, (BteBdAddr *)address, (BteLinkKey *)link_key, NULL, NULL);
+    } else {
+        bte_hci_link_key_req_neg_reply(hci, (BteBdAddr *)address, NULL, NULL);
+    }
+}
+
+void egc_bt_on_link_key_received(EgcBtLinkKeyReceivedCb callback)
+{
+    s_link_key_received_cb = callback;
+    BteHci *hci = bte_hci_get(s_client);
+    bte_hci_on_link_key_notification(hci, on_link_key_received);
+}
+
+int egc_bt_store_link_key(const egc_bt_address_t *address, const egc_bt_link_key_t *key)
+{
+    BteHci *hci = bte_hci_get(s_client);
+    BteHciStoredLinkKey stored_key;
+    memcpy(&stored_key.address, address, sizeof(egc_bt_address_t));
+    memcpy(&stored_key.key, key, sizeof(egc_bt_link_key_t));
+    if (s_stored_link_keys) {
+        int max_keys = s_stored_link_keys_max_ctrl;
+        if (max_keys > s_stored_link_keys_max)
+            max_keys = s_stored_link_keys_max;
+
+        /* Try to find a free slot */
+        int dst_slot = -1;
+        for (int i = 0; i < max_keys; i++) {
+            egc_bt_stored_link_key_t *r = &s_stored_link_keys[i];
+            if (egc_bt_address_cmp(&r->address, address) == 0 ||
+                mem_is_zero(&r->address, sizeof(r->address))) {
+                dst_slot = i;
+                break;
+            }
+        }
+
+        bool needs_deleting = false;
+        if (dst_slot < 0) {
+            needs_deleting = true;
+            if (s_stored_link_keys_oldest >= max_keys) {
+                s_stored_link_keys_oldest = 0;
+            }
+            dst_slot = s_stored_link_keys_oldest++;
+        }
+
+        if (needs_deleting) {
+            egc_bt_address_t *dst_address = &s_stored_link_keys[dst_slot].address;
+            EGC_DEBUG("Deleting key at slot %d (Address " EGC_BT_ADDRESS_FMT ")", dst_slot,
+                      EGC_BT_ADDRESS_DATA(dst_address));
+            bte_hci_delete_stored_link_key(hci, (BteBdAddr *)dst_address, NULL, NULL);
+        }
+        memcpy(&s_stored_link_keys[dst_slot], &stored_key, sizeof(stored_key));
+    }
+    bte_hci_write_stored_link_key(hci, 1, &stored_key, NULL, NULL);
+    return 0;
+}
+
+int egc_bt_delete_link_key(const egc_bt_address_t *address)
+{
+    BteHci *hci = bte_hci_get(s_client);
+    bte_hci_delete_stored_link_key(hci, (BteBdAddr *)address, NULL, NULL);
+    return 0;
+}
+
+void egc_bt_on_pin_requested(EgcBtAuthDataRequestedCb callback)
+{
+    s_pin_code_requested_cb = callback;
+    BteHci *hci = bte_hci_get(s_client);
+    bte_hci_on_pin_code_request(hci, on_pin_code_requested);
+}
+
+void egc_bt_send_pin(const egc_bt_address_t *address, const u8 *pin, u8 length)
+{
+    BteHci *hci = bte_hci_get(s_client);
+    if (pin && length > 0) {
+        bte_hci_pin_code_req_reply(hci, (BteBdAddr *)address, pin, length, NULL, NULL);
+    } else {
+        bte_hci_pin_code_req_neg_reply(hci, (BteBdAddr *)address, NULL, NULL);
+    }
+}
+
+void egc_bt_enable_link_keys_storage(egc_bt_stored_link_key_t *storage, u8 max_keys)
+{
+    s_stored_link_keys = storage;
+    s_stored_link_keys_max = max_keys;
+    memset(storage, 0, sizeof(egc_bt_stored_link_key_t) * max_keys);
+    add_ready_callback(read_stored_link_keys);
 }
 
 #else /* !WITH_BLUETOOTH */
@@ -742,7 +968,46 @@ int egc_bt_device_get_address(egc_input_device_t *device, egc_bt_address_t *addr
     return -ENOSYS;
 }
 
+int egc_bt_get_local_address(egc_bt_address_t *address)
+{
+    return -ENOSYS;
+}
+
 void egc_bt_set_connection_filter(EgcBtConnectionCb callback, void *userdata)
+{
+}
+
+void egc_bt_on_link_key_requested(EgcBtAuthDataRequestedCb callback)
+{
+}
+
+void egc_bt_send_link_key(const egc_bt_address_t *address, const u8 *link_key)
+{
+}
+
+void egc_bt_on_link_key_received(EgcBtLinkKeyReceivedCb callback)
+{
+}
+
+int egc_bt_store_link_key(const egc_bt_address_t *address, const egc_bt_link_key_t *key)
+{
+    return -ENOSYS;
+}
+
+int egc_bt_delete_link_key(const egc_bt_address_t *address)
+{
+    return -ENOSYS;
+}
+
+void egc_bt_on_pin_requested(EgcBtAuthDataRequestedCb callback)
+{
+}
+
+void egc_bt_send_pin(const egc_bt_address_t *address, const u8 *pin)
+{
+}
+
+void egc_bt_enable_link_keys_storage(egc_bt_stored_link_key_t *storage, u8 max_keys)
 {
 }
 
