@@ -242,6 +242,16 @@ typedef struct egc_bt_address_t {
 #define EGC_BT_ADDRESS_DATA_REVERSED(b)                                                            \
     (b)->bytes[0], (b)->bytes[1], (b)->bytes[2], (b)->bytes[3], (b)->bytes[4], (b)->bytes[5]
 
+typedef struct egc_bt_link_key_t {
+    u8 bytes[16];
+} egc_bt_link_key_t;
+
+typedef struct egc_bt_stored_link_key_t {
+    egc_bt_address_t address;
+    egc_bt_link_key_t key;
+} ATTRIBUTE_PACKED egc_bt_stored_link_key_t;
+static_assert(sizeof(egc_bt_stored_link_key_t) == 6 + 16);
+
 static inline int egc_bt_address_cmp(const egc_bt_address_t *a, const egc_bt_address_t *b)
 {
     return memcmp(a, b, sizeof(*a));
@@ -399,5 +409,24 @@ typedef egc_bt_connection_reply_e (*EgcBtConnectionCb)(const egc_bt_address_t *a
                                                        void *userdata);
 
 void egc_bt_set_connection_filter(EgcBtConnectionCb callback);
+
+typedef void (*EgcBtAuthDataRequestedCb)(const egc_bt_address_t *address, void *userdata);
+void egc_bt_on_link_key_requested(EgcBtAuthDataRequestedCb callback);
+/* NULL for no link key available */
+void egc_bt_send_link_key(const egc_bt_address_t *address, const u8 *link_key);
+
+typedef void (*EgcBtLinkKeyReceivedCb)(const egc_bt_address_t *address,
+                                       const egc_bt_link_key_t *key, void *userdata);
+void egc_bt_on_link_key_received(EgcBtLinkKeyReceivedCb callback);
+int egc_bt_store_link_key(const egc_bt_address_t *address, const egc_bt_link_key_t *key);
+int egc_bt_delete_link_key(const egc_bt_address_t *address);
+
+void egc_bt_on_pin_requested(EgcBtAuthDataRequestedCb callback);
+/* NULL for no PIN code available */
+void egc_bt_send_pin(const egc_bt_address_t *address, const u8 *pin, u8 length);
+
+/* This must have at least as many slots as the HCI controller's internal
+ * storage, or we risk deleting more stored keys than needed */
+void egc_bt_enable_link_keys_storage(egc_bt_stored_link_key_t *storage, u8 max_keys);
 
 #endif
