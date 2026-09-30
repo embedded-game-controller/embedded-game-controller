@@ -655,6 +655,13 @@ int egc_bt_device_get_address(egc_input_device_t *input_device, egc_bt_address_t
     return 0;
 }
 
+int egc_bt_get_local_address(egc_bt_address_t *address)
+{
+    BteHci *hci = bte_hci_get(s_client);
+    bool ok = bte_hci_get_bd_address(hci, (BteBdAddr *)address);
+    return ok ? 0 : -1;
+}
+
 #else /* !WITH_BLUETOOTH */
 
 #include <errno.h>
@@ -694,6 +701,11 @@ int egc_bt_leave_page_mode()
 }
 
 int egc_bt_device_get_address(egc_input_device_t *device, egc_bt_address_t *address)
+{
+    return -ENOSYS;
+}
+
+int egc_bt_get_local_address(egc_bt_address_t *address)
 {
     return -ENOSYS;
 }

@@ -373,5 +373,6 @@ int egc_bt_enter_page_mode();
 int egc_bt_leave_page_mode();
 
 int egc_bt_device_get_address(egc_input_device_t *device, egc_bt_address_t *address);
+int egc_bt_get_local_address(egc_bt_address_t *address);
 
 #endif
