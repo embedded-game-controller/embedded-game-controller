@@ -635,11 +635,14 @@ static void enter_page_mode(BteHci *hci)
 static bool on_link_key_requested(BteHci *hci, const BteBdAddr *address, void *userdata)
 {
     EGC_DEBUG("address: " EGC_BT_ADDRESS_FMT, EGC_BT_ADDRESS_DATA((egc_bt_address_t *)address));
+    /* TODO: this code only works if we require auth after creating the SDP channel */
+#if 0
     egc_bt_device_t *device = device_by_address(address);
     if (!device) {
         /* Not one of our devices: ignore */
         return false;
     }
+#endif
 
     if (s_stored_link_keys) {
         /* If we have the key, use it. This code seems to be triggered only on
