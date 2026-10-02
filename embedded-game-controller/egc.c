@@ -453,11 +453,13 @@ int egc_input_device_set_rumble(egc_input_device_t *device, u16 low_frequency, u
     return 0;
 }
 
-static int on_device_added(egc_input_device_t *device, u16 vid, u16 pid)
+static int on_device_added(egc_input_device_t *device)
 {
     egc_device_priv_t *priv = get_priv(device);
     if (!priv->driver) {
         const egc_device_driver_t *driver;
+        u16 vid = device->desc->vendor_id;
+        u16 pid = device->desc->product_id;
 
         /* Find if we have a driver for that VID/PID */
         driver = get_usb_device_driver_for(vid, pid);
@@ -516,9 +518,7 @@ static int event_handler(egc_input_device_t *device, egc_event_e event, ...)
         on_device_input(device, buffer, length);
         rc = 0;
     } else if (event == EGC_EVENT_DEVICE_ADDED) {
-        u16 vid = va_arg(args, int);
-        u16 pid = va_arg(args, int);
-        rc = on_device_added(device, vid, pid);
+        rc = on_device_added(device);
     } else if (event == EGC_EVENT_DEVICE_REMOVED) {
         rc = on_device_removed(device);
     }

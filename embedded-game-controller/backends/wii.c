@@ -69,8 +69,6 @@ typedef struct {
     egc_transfer_cb callback;
 } wii_transfer_t;
 
-static egc_device_description_t s_device_descriptions[MAX_ACTIVE_DEVICES];
-
 /* Maximum number of events in the queue. If the handle_events() function is
  * not called often enough, the queue might fill and events will be lost. */
 #define WII_MAX_EVENTS 32
@@ -111,9 +109,11 @@ static inline wii_device_t *get_usb_device_for_dev_id(s32 dev_id)
 static inline wii_device_t *get_free_device_slot(void)
 {
     for (int i = 0; i < ARRAY_SIZE(s_devices); i++) {
-        if (PUB(&s_devices[i])->connection == EGC_CONNECTION_DISCONNECTED) {
-            memset(&s_devices[i], 0, sizeof(s_devices[0]));
-            return &s_devices[i];
+        wii_device_t *device = &s_devices[i];
+        if (PUB(device)->connection == EGC_CONNECTION_DISCONNECTED) {
+            memset(device, 0, sizeof(*device));
+            PUB(device)->desc = &device->desc;
+            return device;
         }
     }
 
@@ -219,7 +219,6 @@ static egc_input_device_t *wii_bt_device_alloc(const egc_bt_device_desc_t *desc)
     if (!device)
         return NULL;
 
-    memset(device, 0, sizeof(*device));
     device->desc.vendor_id = desc->vendor_id;
     device->desc.product_id = desc->product_id;
     return PUB(device);
@@ -227,9 +226,7 @@ static egc_input_device_t *wii_bt_device_alloc(const egc_bt_device_desc_t *desc)
 
 static int wii_bt_device_add(egc_input_device_t *input_device)
 {
-    wii_device_t *device = wii_device_from_input_device(input_device);
-    return s_event_handler(input_device, EGC_EVENT_DEVICE_ADDED, device->desc.vendor_id,
-                           device->desc.product_id);
+    return s_event_handler(input_device, EGC_EVENT_DEVICE_ADDED);
 }
 
 static void wii_bt_device_free(egc_input_device_t *input_device)
@@ -296,8 +293,7 @@ static int wii_set_timer(egc_input_device_t *input_device, int time_us, int repe
 static bool report_event(wii_event_e type, wii_device_t *device)
 {
     if (type == WII_EVENT_DEVICE_ADDED) {
-        int ret = s_event_handler(PUB(device), EGC_EVENT_DEVICE_ADDED, device->usb.dev.vid,
-                                  device->usb.dev.pid);
+        int ret = s_event_handler(PUB(device), EGC_EVENT_DEVICE_ADDED);
         if (ret != 0) {
             wii_device_free(device);
         }
@@ -318,13 +314,7 @@ static void wii_device_free(wii_device_t *device)
     }
 
     PUB(device)->connection = EGC_CONNECTION_DISCONNECTED;
-    /* If the desc structure was allocated by us, free it */
-    for (int i = 0; i < ARRAY_SIZE(s_device_descriptions); i++) {
-        if (PUB(device)->desc == &s_device_descriptions[i]) {
-            memset(&s_device_descriptions[i], 0, sizeof(egc_device_description_t));
-            break;
-        }
-    }
+    memset(&device->desc, 0, sizeof(device->desc));
 }
 
 /* This is called from an interrupt: do nothing in here, just send the event to
@@ -396,6 +386,8 @@ static int update_device_list(void)
             break;
 
         memcpy(&device->usb.dev, &devlist[i], sizeof(device->usb.dev));
+        device->desc.vendor_id = vid;
+        device->desc.product_id = pid;
 
         ret = USB_OpenDevice(dev_id, vid, pid, &device->usb.fd);
         if (ret != USB_OK) {
@@ -531,16 +523,11 @@ static int wii_init(egc_event_cb event_handler)
     return update_device_list();
 }
 
-static egc_device_description_t *wii_alloc_desc(egc_input_device_t *device)
+static egc_device_description_t *wii_alloc_desc(egc_input_device_t *input_device)
 {
-    for (int i = 0; i < ARRAY_SIZE(s_device_descriptions); i++) {
-        if (s_device_descriptions[i].vendor_id == 0) {
-            device->desc = &s_device_descriptions[i];
-            return &s_device_descriptions[i];
-        }
-    }
-
-    return NULL;
+    wii_device_t *device = wii_device_from_input_device(input_device);
+    input_device->desc = &device->desc;
+    return &device->desc;
 }
 
 static const egc_usb_devdesc_t *wii_get_device_descriptor(egc_input_device_t *device)

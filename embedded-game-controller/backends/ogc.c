@@ -56,10 +56,6 @@ static_assert(sizeof(struct usb_hid_v5_transfer) == 64);
 
 typedef struct {
     void *priv;
-    /* VID and PID */
-    /* TODO: remove, read them from "desc" */
-    u16 vid;
-    u16 pid;
     /* Used to communicate with Wii's USB module */
     int host_fd;
     u32 dev_id;
@@ -69,6 +65,8 @@ typedef struct {
 typedef struct {
     /* This must be the first member, since we use it for casting */
     egc_device_priv_t priv;
+    egc_device_description_t desc;
+
     union {
         egc_usb_device_t usb;
         // TODO: add bluetooth data here
@@ -94,8 +92,6 @@ typedef struct {
     struct egc_usb_transfer_t t;
     egc_transfer_cb callback;
 } ogc_transfer_t;
-
-static egc_device_description_t s_device_descriptions[MAX_ACTIVE_DEVICES];
 
 /* Maximum number of events in the queue. If the handle_events() function is
  * not called often enough, the queue might fill and events will be lost. */
@@ -162,8 +158,12 @@ static inline ogc_device_t *get_usb_device_for_dev_id(u32 dev_id)
 static inline ogc_device_t *get_free_device_slot(void)
 {
     for (int i = 0; i < ARRAY_SIZE(s_devices); i++) {
-        if (PUB(&s_devices[i])->connection == EGC_CONNECTION_DISCONNECTED)
-            return &s_devices[i];
+        ogc_device_t *device = &s_devices[i];
+        if (PUB(device)->connection == EGC_CONNECTION_DISCONNECTED) {
+            memset(device, 0, sizeof(*device));
+            PUB(device)->desc = &device->desc;
+            return device;
+        }
     }
 
     return NULL;
@@ -444,7 +444,7 @@ static bool report_event(egc_event_e type, ogc_device_t *device)
 {
     bool ok = false;
     if (type == EGC_EVENT_DEVICE_ADDED) {
-        int ret = s_event_handler(PUB(device), type, device->usb.vid, device->usb.pid);
+        int ret = s_event_handler(PUB(device), type);
         ok = (ret == 0);
     } else if (type == EGC_EVENT_DEVICE_REMOVED) {
         s_event_handler(PUB(device), type);
@@ -456,16 +456,11 @@ static bool report_event(egc_event_e type, ogc_device_t *device)
 static void ogc_device_free(ogc_device_t *device)
 {
     PUB(device)->connection = EGC_CONNECTION_DISCONNECTED;
+    memset(&device->desc, 0, sizeof(device->desc));
+
     if (device->timer_id >= 0) {
         os_destroy_timer(device->timer_id);
         device->timer_id = -1;
-    }
-    /* If the desc structure was allocated by us, free it */
-    for (int i = 0; i < ARRAY_SIZE(s_device_descriptions); i++) {
-        if (PUB(device)->desc == &s_device_descriptions[i]) {
-            memset(&s_device_descriptions[i], 0, sizeof(egc_device_description_t));
-            break;
-        }
     }
 }
 
@@ -501,7 +496,7 @@ static void handle_device_change_reply(int host_fd, areply *reply)
         if (!found) {
             EGC_DEBUG("Device with VID: 0x%04x, PID: 0x%04x, dev_id: 0x%" PRIx32
                       " got disconnected",
-                      device->usb.vid, device->usb.pid, device->usb.dev_id);
+                      device->usb.desc.vid, device->usb.desc.pid, device->usb.dev_id);
 
             report_event(EGC_EVENT_DEVICE_REMOVED, device);
             ogc_device_free(device);
@@ -544,8 +539,8 @@ static void handle_device_change_reply(int host_fd, areply *reply)
         }
 
         /* We have ownership, populate the device info */
-        device->usb.vid = vid;
-        device->usb.pid = pid;
+        device->desc.vendor_id = vid;
+        device->desc.product_id = pid;
         device->usb.host_fd = host_fd;
         device->usb.dev_id = dev_id;
         device->timer_id = -1;
@@ -717,16 +712,11 @@ static int ogc_init(egc_event_cb event_handler)
     return 0;
 }
 
-static egc_device_description_t *ogc_alloc_desc(egc_input_device_t *device)
+static egc_device_description_t *ogc_alloc_desc(egc_input_device_t *input_device)
 {
-    for (int i = 0; i < ARRAY_SIZE(s_device_descriptions); i++) {
-        if (s_device_descriptions[i].vendor_id == 0) {
-            device->desc = &s_device_descriptions[i];
-            return &s_device_descriptions[i];
-        }
-    }
-
-    return NULL;
+    ogc_device_t *device = ogc_device_from_input_device(input_device);
+    input_device->desc = &device->desc;
+    return &device->desc;
 }
 
 static const egc_usb_devdesc_t *ogc_get_device_descriptor(egc_input_device_t *device)
