@@ -22,18 +22,18 @@ static void dr_driver_ops_intr_event(egc_input_device_t *device, const void *dat
     }
 }
 
-static bool dr_driver_ops_probe(u16 vid, u16 pid)
+static bool dr_driver_ops_probe(const egc_device_description_t *desc)
 {
-    const u8 *elements = egc_device_driver_input_parser_for(vid, pid);
+    const u8 *elements = egc_device_driver_input_parser_for(desc->vendor_id, desc->product_id);
     return elements != NULL;
 }
 
-static int dr_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
+static int dr_driver_ops_init(egc_input_device_t *device)
 {
     struct dr_private_data_t *priv = PRIV(device);
 
     egc_device_description_t *desc = egc_device_driver_get_desc(device);
-    priv->report_elements = egc_device_driver_input_parser_for(vid, pid);
+    priv->report_elements = egc_device_driver_input_parser_for(desc->vendor_id, desc->product_id);
     egc_device_driver_fill_desc(desc, priv->report_elements);
 
     /* Compute the report size by parsing a fake report */

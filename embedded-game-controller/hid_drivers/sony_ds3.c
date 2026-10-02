@@ -313,16 +313,16 @@ static int ds3_driver_update_leds_rumble(egc_input_device_t *device)
     return ds3_set_leds_rumble(device, leds, &rumble);
 }
 
-bool ds3_driver_ops_probe(u16 vid, u16 pid)
+bool ds3_driver_ops_probe(const egc_device_description_t *desc)
 {
     static const egc_device_id_t compatible[] = {
         { SONY_VID, 0x0268 },
     };
 
-    return egc_device_driver_is_compatible(vid, pid, compatible, ARRAY_SIZE(compatible));
+    return egc_device_driver_is_compatible(desc, compatible, ARRAY_SIZE(compatible));
 }
 
-int ds3_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
+int ds3_driver_ops_init(egc_input_device_t *device)
 {
     int ret;
     struct ds3_private_data_t *priv = PRIV(device);

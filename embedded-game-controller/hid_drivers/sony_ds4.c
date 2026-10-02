@@ -312,21 +312,22 @@ static int ds4_driver_update_leds_rumble(egc_input_device_t *device)
     return ds4_set_leds_rumble(device, r, g, b, priv->rumble_high, priv->rumble_low);
 }
 
-bool ds4_driver_ops_probe(u16 vid, u16 pid)
+bool ds4_driver_ops_probe(const egc_device_description_t *desc)
 {
     static const egc_device_id_t compatible[] = {
         { SONY_VID, 0x05c4 },
         { SONY_VID, 0x09cc },
     };
 
-    return egc_device_driver_is_compatible(vid, pid, compatible, ARRAY_SIZE(compatible));
+    return egc_device_driver_is_compatible(desc, compatible, ARRAY_SIZE(compatible));
 }
 
-int ds4_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
+int ds4_driver_ops_init(egc_input_device_t *device)
 {
     struct ds4_private_data_t *priv = PRIV(device);
 
     egc_device_description_t *desc = egc_device_driver_get_desc(device);
+    u16 pid = desc->product_id;
     memcpy(desc, &s_device_description, sizeof(*desc));
     desc->product_id = pid;
 

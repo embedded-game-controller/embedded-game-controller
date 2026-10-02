@@ -1817,17 +1817,17 @@ static void wm_driver_ops_intr_event(egc_input_device_t *device, const void *dat
     egc_device_driver_report_input(device, &state);
 }
 
-static bool wm_driver_ops_probe(u16 vid, u16 pid)
+static bool wm_driver_ops_probe(const egc_device_description_t *desc)
 {
     static const egc_device_id_t compatible[] = {
         { WM_VID_NINTENDO,  WM_PID_WIIMOTE },
         { WM_VID_NINTENDO, WM_PID_WIIU_PRO },
     };
 
-    return egc_device_driver_is_compatible(vid, pid, compatible, ARRAY_SIZE(compatible));
+    return egc_device_driver_is_compatible(desc, compatible, ARRAY_SIZE(compatible));
 }
 
-static int wm_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
+static int wm_driver_ops_init(egc_input_device_t *device)
 {
     struct wm_private_data_t *priv = PRIV(device);
 
@@ -1840,6 +1840,7 @@ static int wm_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
 
     priv->requested_leds = 1; /* otherwise they will blink forever */
     egc_device_description_t *desc = egc_device_driver_get_desc(device);
+    u16 pid = desc->product_id;
     memcpy(desc, &s_device_description_wiimote, sizeof(s_device_description_wiimote));
 
     egc_device_driver_set_endpoints(device, EGC_USB_ENDPOINT_IN | 1, 5, EGC_USB_ENDPOINT_OUT, 5);

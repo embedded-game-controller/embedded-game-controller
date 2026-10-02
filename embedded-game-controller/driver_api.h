@@ -8,8 +8,8 @@ typedef struct egc_input_device_t egc_input_device_t;
 typedef struct egc_device_driver_t egc_device_driver_t;
 
 struct egc_device_driver_t {
-    bool (*probe)(u16 vid, u16 pid);
-    int (*init)(egc_input_device_t *device, u16 vid, u16 pid);
+    bool (*probe)(const egc_device_description_t *desc);
+    int (*init)(egc_input_device_t *device);
     int (*disconnect)(egc_input_device_t *device);
     int (*set_leds)(egc_input_device_t *device, u32 leds);
     int (*set_rumble)(egc_input_device_t *device, u16 low_frequency, u16 high_frequency);
@@ -26,8 +26,8 @@ typedef struct {
     u16 pid;
 } egc_device_id_t;
 
-static inline bool egc_device_driver_is_compatible(u16 vid, u16 pid, const egc_device_id_t *ids,
-                                                   int num)
+static inline bool egc_device_driver_match_ids(u16 vid, u16 pid, const egc_device_id_t *ids,
+                                               int num)
 {
     for (int i = 0; i < num; i++) {
         if (ids[i].vid == vid && ids[i].pid == pid)
@@ -35,6 +35,12 @@ static inline bool egc_device_driver_is_compatible(u16 vid, u16 pid, const egc_d
     }
 
     return false;
+}
+
+static inline bool egc_device_driver_is_compatible(const egc_device_description_t *desc,
+                                                   const egc_device_id_t *ids, int num)
+{
+    return egc_device_driver_match_ids(desc->vendor_id, desc->product_id, ids, num);
 }
 
 static inline egc_device_description_t *egc_device_driver_get_desc(egc_input_device_t *device)

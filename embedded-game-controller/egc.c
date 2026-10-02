@@ -39,10 +39,11 @@ static void *s_callbacks_userdata = NULL;
 
 static void read_interrupts(egc_input_device_t *device);
 
-static inline const egc_device_driver_t *get_usb_device_driver_for(u16 vid, u16 pid)
+static inline const egc_device_driver_t *
+get_usb_device_driver_for(const egc_device_description_t *desc)
 {
     for (int i = 0; i < ARRAY_SIZE(usb_device_drivers); i++) {
-        if (usb_device_drivers[i]->probe(vid, pid))
+        if (usb_device_drivers[i]->probe(desc))
             return usb_device_drivers[i];
     }
 
@@ -397,8 +398,7 @@ int egc_input_device_resume(egc_input_device_t *device)
     device->suspended = false;
 
     if (priv->driver->init) {
-        const egc_usb_devdesc_t *desc = _egc_platform_backend.usb.get_device_descriptor(device);
-        return priv->driver->init(device, desc->idVendor, desc->idProduct);
+        return priv->driver->init(device);
     }
 
     read_interrupts(device);
@@ -453,18 +453,16 @@ static int on_device_added(egc_input_device_t *device)
     egc_device_priv_t *priv = get_priv(device);
     if (!priv->driver) {
         const egc_device_driver_t *driver;
-        u16 vid = device->desc->vendor_id;
-        u16 pid = device->desc->product_id;
 
         /* Find if we have a driver for that VID/PID */
-        driver = get_usb_device_driver_for(vid, pid);
+        driver = get_usb_device_driver_for(device->desc);
         if (!driver)
             return -1;
 
         /* We have ownership, populate the device info */
         priv->driver = driver;
         if (driver->init) {
-            int rc = driver->init(device, vid, pid);
+            int rc = driver->init(device);
             if (rc < 0)
                 return rc;
         }
