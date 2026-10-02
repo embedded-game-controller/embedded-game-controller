@@ -855,7 +855,7 @@ static bool ns_driver_ops_timer(egc_input_device_t *device)
     return false;
 }
 
-static bool ns_driver_ops_probe(u16 vid, u16 pid)
+static bool ns_driver_ops_probe(const egc_device_description_t *desc)
 {
     static const egc_device_id_t compatible[] = {
         { NS_VID_NINTENDO, NS_PID_LJC }, /* Left Joy-con */
@@ -863,14 +863,14 @@ static bool ns_driver_ops_probe(u16 vid, u16 pid)
         { NS_VID_NINTENDO, NS_PID_PRO }, /* Switch Pro Controller */
     };
 
-    return egc_device_driver_is_compatible(vid, pid, compatible, ARRAY_SIZE(compatible));
+    return egc_device_driver_is_compatible(desc, compatible, ARRAY_SIZE(compatible));
 }
 
-static int ns_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
+static int ns_driver_ops_init(egc_input_device_t *device)
 {
     struct ns_private_data_t *priv = PRIV(device);
 
-    switch (pid) {
+    switch (device->desc->product_id) {
     case NS_PID_PRO:
         device->desc = &s_device_description_pro;
         break;
