@@ -92,14 +92,13 @@ static egc_input_device_t *lu_bt_device_alloc(const egc_bt_device_desc_t *desc)
     memset(device, 0, sizeof(*device));
     device->desc.vendor_id = desc->vendor_id;
     device->desc.product_id = desc->product_id;
+    PUB(device)->desc = &device->desc;
     return PUB(device);
 }
 
 static int lu_bt_device_add(egc_input_device_t *input_device)
 {
-    lu_device_t *device = lu_device_from_input_device(input_device);
-    return s_event_handler(input_device, EGC_EVENT_DEVICE_ADDED, device->desc.vendor_id,
-                           device->desc.product_id);
+    return s_event_handler(input_device, EGC_EVENT_DEVICE_ADDED);
 }
 
 static void lu_bt_device_free(egc_input_device_t *input_device)
@@ -260,6 +259,7 @@ static int on_device_added(libusb_context *ctx, libusb_device *dev, libusb_hotpl
     device->timer_us = 0;
     device->repeat_timer_us = 0;
     device->timer_callback = NULL;
+    PUB(device)->desc = &device->desc;
     PUB(device)->connection = EGC_CONNECTION_USB;
 
     rc = s_event_handler(PUB(device), EGC_EVENT_DEVICE_ADDED, desc.idVendor, desc.idProduct);
