@@ -523,13 +523,6 @@ static int wii_init(egc_event_cb event_handler)
     return update_device_list();
 }
 
-static egc_device_description_t *wii_alloc_desc(egc_input_device_t *input_device)
-{
-    wii_device_t *device = wii_device_from_input_device(input_device);
-    input_device->desc = &device->desc;
-    return &device->desc;
-}
-
 static const egc_usb_devdesc_t *wii_get_device_descriptor(egc_input_device_t *device)
 {
     wii_device_t *dev = wii_device_from_input_device(device);
@@ -581,7 +574,6 @@ const egc_platform_backend_t _egc_platform_backend = {
     },
 #endif
     .init = wii_init,
-    .alloc_desc = wii_alloc_desc,
     .set_timer = wii_set_timer,
     .report_input = wii_report_input,
     .wait_events = wii_wait_events,

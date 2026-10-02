@@ -712,13 +712,6 @@ static int ogc_init(egc_event_cb event_handler)
     return 0;
 }
 
-static egc_device_description_t *ogc_alloc_desc(egc_input_device_t *input_device)
-{
-    ogc_device_t *device = ogc_device_from_input_device(input_device);
-    input_device->desc = &device->desc;
-    return &device->desc;
-}
-
 static const egc_usb_devdesc_t *ogc_get_device_descriptor(egc_input_device_t *device)
 {
     ogc_device_t *dev = ogc_device_from_input_device(device);
@@ -745,7 +738,6 @@ const egc_platform_backend_t _egc_platform_backend = {
         .intr_transfer_async = ogc_intr_transfer_async,
     },
     .init = ogc_init,
-    .alloc_desc = ogc_alloc_desc,
     .set_timer = ogc_set_timer,
     .report_input = ogc_report_input,
     .wait_events = ogc_wait_events,

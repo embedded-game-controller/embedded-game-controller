@@ -321,13 +321,6 @@ static int lu_init(egc_event_cb event_handler)
     return 0;
 }
 
-static egc_device_description_t *lu_alloc_desc(egc_input_device_t *input_device)
-{
-    lu_device_t *device = lu_device_from_input_device(input_device);
-    input_device->desc = &device->desc;
-    return &device->desc;
-}
-
 static const egc_usb_devdesc_t *lu_get_device_descriptor(egc_input_device_t *input_device)
 {
     lu_device_t *device = lu_device_from_input_device(input_device);
@@ -399,7 +392,6 @@ const egc_platform_backend_t _egc_platform_backend = {
     },
 #endif
     .init = lu_init,
-    .alloc_desc = lu_alloc_desc,
     .set_timer = lu_set_timer,
     .report_input = lu_report_input,
     .wait_events = lu_wait_events,
