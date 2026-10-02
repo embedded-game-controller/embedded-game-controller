@@ -325,12 +325,11 @@ bool ds4_driver_ops_probe(u16 vid, u16 pid)
 int ds4_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
 {
     struct ds4_private_data_t *priv = PRIV(device);
-    egc_device_description_t *desc = egc_device_driver_alloc_desc(device);
 
-    if (desc) {
-        memcpy(desc, &s_device_description, sizeof(*desc));
-        desc->product_id = pid;
-    }
+    egc_device_description_t *desc = egc_device_driver_get_desc(device);
+    memcpy(desc, &s_device_description, sizeof(*desc));
+    desc->product_id = pid;
+
     /* Init private state */
     priv->led_color[0] = priv->led_color[1] = priv->led_color[2] = 0;
     priv->rumble_low = priv->rumble_high = 0;

@@ -37,7 +37,11 @@ static inline bool egc_device_driver_is_compatible(u16 vid, u16 pid, const egc_d
     return false;
 }
 
-egc_device_description_t *egc_device_driver_alloc_desc(egc_input_device_t *device);
+static inline egc_device_description_t *egc_device_driver_get_desc(egc_input_device_t *device)
+{
+    return (egc_device_description_t *)device->desc;
+}
+
 /* For USB connections */
 void egc_device_driver_set_endpoints(egc_input_device_t *device, u8 endpoint_in, u8 interval_in,
                                      u8 endpoint_out, u8 interval_out);

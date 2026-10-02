@@ -1839,9 +1839,8 @@ static int wm_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
     cal->g_force[0] = cal->g_force[1] = cal->g_force[2] = 108;
 
     priv->requested_leds = 1; /* otherwise they will blink forever */
-    egc_device_description_t *desc = egc_device_driver_alloc_desc(device);
+    egc_device_description_t *desc = egc_device_driver_get_desc(device);
     memcpy(desc, &s_device_description_wiimote, sizeof(s_device_description_wiimote));
-    device->desc = desc;
 
     egc_device_driver_set_endpoints(device, EGC_USB_ENDPOINT_IN | 1, 5, EGC_USB_ENDPOINT_OUT, 5);
 

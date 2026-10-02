@@ -32,9 +32,7 @@ static int dr_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
 {
     struct dr_private_data_t *priv = PRIV(device);
 
-    egc_device_description_t *desc = egc_device_driver_alloc_desc(device);
-    desc->vendor_id = vid;
-    desc->product_id = pid;
+    egc_device_description_t *desc = egc_device_driver_get_desc(device);
     priv->report_elements = egc_device_driver_input_parser_for(vid, pid);
     egc_device_driver_fill_desc(desc, priv->report_elements);
 
@@ -48,7 +46,6 @@ static int dr_driver_ops_init(egc_input_device_t *device, u16 vid, u16 pid)
         egc_device_driver_set_read_size(device, size);
     }
 
-    device->desc = desc;
     egc_device_driver_set_endpoints(device, EGC_USB_ENDPOINT_IN | 1, 5, 0 /* not used */, 5);
 
     priv->process_reports = false;

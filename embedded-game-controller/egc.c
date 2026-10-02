@@ -76,11 +76,6 @@ static void read_interrupts(egc_input_device_t *device)
 }
 
 /* API exposed to USB device drivers */
-egc_device_description_t *egc_device_driver_alloc_desc(egc_input_device_t *device)
-{
-    return _egc_platform_backend.alloc_desc(device);
-}
-
 void egc_device_driver_set_endpoints(egc_input_device_t *device, u8 endpoint_in, u8 interval_in,
                                      u8 endpoint_out, u8 interval_out)
 {

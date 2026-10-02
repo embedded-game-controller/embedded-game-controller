@@ -24,9 +24,6 @@ typedef struct egc_platform_backend_t {
      * egc_event_device_added() for each connected device. */
     int (*init)(egc_event_cb event_handler);
 
-    /* Allocate a struct for the device description */
-    egc_device_description_t *(*alloc_desc)(egc_input_device_t *device);
-
     /* Returns < 0 if the timer cannot be set. In general, we should not assume
      * that the platform supports more than a timer per device at a time. */
     int (*set_timer)(egc_input_device_t *device, int time_us, int repeat_time_us,
