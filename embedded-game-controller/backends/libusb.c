@@ -75,25 +75,22 @@ static void device_free(lu_device_t *device)
 static inline lu_device_t *get_free_device_slot(void)
 {
     for (int i = 0; i < ARRAY_SIZE(s_devices); i++) {
-        if (PUB(&s_devices[i])->connection == EGC_CONNECTION_DISCONNECTED)
-            return &s_devices[i];
+        lu_device_t *device = &s_devices[i];
+        if (PUB(device)->connection == EGC_CONNECTION_DISCONNECTED) {
+            memset(device, 0, sizeof(*device));
+            PUB(device)->desc = &device->desc;
+            return device;
+        }
     }
 
     return NULL;
 }
 
 #if WITH_BLUETOOTH
-static egc_input_device_t *lu_bt_device_alloc(const egc_bt_device_desc_t *desc)
+static egc_input_device_t *lu_bt_device_alloc()
 {
     lu_device_t *device = get_free_device_slot();
-    if (!device)
-        return NULL;
-
-    memset(device, 0, sizeof(*device));
-    device->desc.vendor_id = desc->vendor_id;
-    device->desc.product_id = desc->product_id;
-    PUB(device)->desc = &device->desc;
-    return PUB(device);
+    return device ? PUB(device) : NULL;
 }
 
 static int lu_bt_device_add(egc_input_device_t *input_device)
@@ -259,7 +256,6 @@ static int on_device_added(libusb_context *ctx, libusb_device *dev, libusb_hotpl
     device->timer_us = 0;
     device->repeat_timer_us = 0;
     device->timer_callback = NULL;
-    PUB(device)->desc = &device->desc;
     PUB(device)->connection = EGC_CONNECTION_USB;
 
     rc = s_event_handler(PUB(device), EGC_EVENT_DEVICE_ADDED, desc.idVendor, desc.idProduct);

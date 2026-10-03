@@ -213,15 +213,10 @@ static const egc_usb_transfer_t *wii_intr_transfer_async(egc_input_device_t *inp
 }
 
 #if WITH_BLUETOOTH
-static egc_input_device_t *wii_bt_device_alloc(const egc_bt_device_desc_t *desc)
+static egc_input_device_t *wii_bt_device_alloc()
 {
     wii_device_t *device = get_free_device_slot();
-    if (!device)
-        return NULL;
-
-    device->desc.vendor_id = desc->vendor_id;
-    device->desc.product_id = desc->product_id;
-    return PUB(device);
+    return device ? PUB(device) : NULL;
 }
 
 static int wii_bt_device_add(egc_input_device_t *input_device)

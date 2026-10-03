@@ -293,7 +293,7 @@ static void connect_to_device(egc_bt_device_t *device, const egc_bt_device_desc_
     EGC_DEBUG("VID %04x, PID %04x", desc->vendor_id, desc->product_id);
     /* Allocate the device and initialize it, but don't invoke the driver yet. */
     egc_input_device_t *input_device = device->input_device =
-        _egc_platform_backend.bt.device_alloc(desc);
+        _egc_platform_backend.bt.device_alloc();
     if (!input_device) {
         EGC_DEBUG("Couldn't allocate device");
         bt_device_free(device);
@@ -301,6 +301,9 @@ static void connect_to_device(egc_bt_device_t *device, const egc_bt_device_desc_
     }
 
     input_device->connection = EGC_CONNECTION_BT;
+    egc_device_description_t *wdesc = (egc_device_description_t *)input_device->desc;
+    wdesc->vendor_id = desc->vendor_id;
+    wdesc->product_id = desc->product_id;
 
     if (device->state == EGC_BT_STATE_PROBING) {
         const BteBdAddr *address = device_get_address(device);
