@@ -290,7 +290,8 @@ static bool parse_sdp_reply(egc_bt_device_desc_t *bt_device_desc, const uint8_t 
 
 static void connect_to_device(egc_bt_device_t *device, const egc_bt_device_desc_t *desc)
 {
-    EGC_DEBUG("VID %04x, PID %04x", desc->vendor_id, desc->product_id);
+    EGC_DEBUG("VID %04x, PID %04x, Name: %s", desc->vendor_id, desc->product_id,
+              desc->name ? desc->name : "(NULL)");
     /* Allocate the device and initialize it, but don't invoke the driver yet. */
     egc_input_device_t *input_device = device->input_device =
         _egc_platform_backend.bt.device_alloc();
@@ -304,6 +305,11 @@ static void connect_to_device(egc_bt_device_t *device, const egc_bt_device_desc_
     egc_device_description_t *wdesc = (egc_device_description_t *)input_device->desc;
     wdesc->vendor_id = desc->vendor_id;
     wdesc->product_id = desc->product_id;
+    if (desc->name) {
+        strtcpy(wdesc->name, desc->name, sizeof(wdesc->name));
+    } else {
+        wdesc->name[0] = '\0';
+    }
 
     if (device->state == EGC_BT_STATE_PROBING) {
         const BteBdAddr *address = device_get_address(device);
@@ -319,13 +325,35 @@ static void connect_to_device(egc_bt_device_t *device, const egc_bt_device_desc_
     }
 }
 
+static void read_name_cb(BteHci *hci, const BteHciReadRemoteNameReply *reply, void *userdata)
+{
+    egc_bt_device_t *device = userdata;
+    if (reply->status != BTE_HCI_SUCCESS) {
+        EGC_DEBUG("status %d, aborting", reply->status);
+        bt_device_free(device);
+        return;
+    }
+
+    EGC_DEBUG("Got name: %s", reply->name);
+    egc_bt_device_desc_t desc = { 0x0, 0x0, reply->name };
+    connect_to_device(device, &desc);
+}
+
+static void fallback_retrieve_name(egc_bt_device_t *device)
+{
+    /* The SDP reading failed, fall back to read the device name */
+    BteHci *hci = bte_hci_get(s_client);
+    bte_hci_read_remote_name(hci, device_get_address(device), 0, BTE_HCI_CLOCK_OFFSET_INVALID, NULL,
+                             read_name_cb, device);
+}
+
 static void sdp_service_search_attr_cb(BteSdpClient *sdp, const BteSdpServiceAttrReply *reply,
                                        void *userdata)
 {
     egc_bt_device_t *device = userdata;
     if (reply->error_code != 0) {
         EGC_DEBUG("Failed %d", reply->error_code);
-        bt_device_free(device);
+        fallback_retrieve_name(device);
         return;
     }
 
@@ -333,7 +361,7 @@ static void sdp_service_search_attr_cb(BteSdpClient *sdp, const BteSdpServiceAtt
     bool ok = parse_sdp_reply(&desc, reply->attr_list_de);
     if (!ok) {
         EGC_DEBUG("Invalid SDP data");
-        bt_device_free(device);
+        fallback_retrieve_name(device);
         return;
     }
 
