@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <errno.h>
 #include <ogc/machine/processor.h>
 #include <ogc/system.h>
 #include <ogc/usb.h>
@@ -152,15 +153,14 @@ static s32 wii_transfer_cb(s32 result, void *userdata)
     return result;
 }
 
-static const egc_usb_transfer_t *wii_ctrl_transfer_async(egc_input_device_t *input_device,
-                                                         u8 requesttype, u8 request, u16 value,
-                                                         u16 index, void *data, u16 length,
-                                                         egc_transfer_cb callback)
+static int wii_ctrl_transfer_async(egc_input_device_t *input_device, u8 requesttype, u8 request,
+                                   u16 value, u16 index, void *data, u16 length,
+                                   egc_transfer_cb callback)
 {
     wii_device_t *device = (wii_device_t *)input_device;
     wii_transfer_t *t = get_free_transfer();
     if (!t)
-        return NULL;
+        return -EAGAIN;
 
     assert(length <= sizeof(t->buffer));
     if (length > 0) {
@@ -180,17 +180,16 @@ static const egc_usb_transfer_t *wii_ctrl_transfer_async(egc_input_device_t *inp
         t->t.device = NULL; /* Mark as unused */
         t = NULL;
     }
-    return &t->t;
+    return rc;
 }
 
-static const egc_usb_transfer_t *wii_intr_transfer_async(egc_input_device_t *input_device,
-                                                         u8 endpoint, void *data, u16 length,
-                                                         egc_transfer_cb callback)
+static int wii_intr_transfer_async(egc_input_device_t *input_device, u8 endpoint, void *data,
+                                   u16 length, egc_transfer_cb callback)
 {
     wii_device_t *device = (wii_device_t *)input_device;
     wii_transfer_t *t = get_free_transfer();
     if (!t)
-        return NULL;
+        return -EAGAIN;
 
     assert(length <= sizeof(t->buffer));
     if (data)
@@ -207,9 +206,9 @@ static const egc_usb_transfer_t *wii_intr_transfer_async(egc_input_device_t *inp
     int rc = USB_WriteIntrMsgAsync(device->usb.fd, endpoint, length, t->buffer, wii_transfer_cb, t);
     if (rc < 0) {
         t->t.device = NULL; /* Mark as unused */
-        return NULL;
+        return -1;
     }
-    return &t->t;
+    return 0;
 }
 
 #if WITH_BLUETOOTH

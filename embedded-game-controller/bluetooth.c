@@ -572,11 +572,10 @@ int _egc_bt_initialize()
     return 0;
 }
 
-const egc_usb_transfer_t *_egc_bt_ctrl_transfer(egc_input_device_t *input_device, u8 requesttype,
-                                                u8 request, u16 value, u16 index, void *data,
-                                                u16 len, egc_transfer_cb callback)
+int _egc_bt_ctrl_transfer(egc_input_device_t *input_device, u8 requesttype, u8 request, u16 value,
+                          u16 index, void *data, u16 len, egc_transfer_cb callback)
 {
-    return NULL; /* TODO */
+    return -1; /* TODO */
 }
 
 int _egc_bt_intr_transfer(egc_input_device_t *input_device, void *data, u16 len)
@@ -671,11 +670,10 @@ int egc_bt_get_local_address(egc_bt_address_t *address)
 
 #include "egc.h"
 
-const egc_usb_transfer_t *_egc_bt_ctrl_transfer(egc_input_device_t *device, u8 requesttype,
-                                                u8 request, u16 value, u16 index, void *data,
-                                                u16 length, egc_transfer_cb callback)
+int _egc_bt_ctrl_transfer(egc_input_device_t *device, u8 requesttype, u8 request, u16 value,
+                          u16 index, void *data, u16 length, egc_transfer_cb callback)
 {
-    return NULL;
+    return -ENOSYS;
 }
 
 int _egc_bt_intr_transfer(egc_input_device_t *device, void *data, u16 length)
