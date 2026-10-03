@@ -46,6 +46,18 @@
 #define EGC_DEBUG_DATA(data, len) (void)0
 #endif
 
+static inline ssize_t strtcpy(char *dest, const char *src, size_t dsize) {
+    ssize_t i;
+    for (i = 0; i < dsize && src[i] != '\0'; i++) {
+        dest[i] = src[i];
+    }
+    if (i == dsize) {
+        dest[i - 1] = '\0';
+        return -1;
+    }
+    return i;
+}
+
 static inline void egc_debug_data(const char *prefix, const u8 *data, u16 length)
 {
     if (length == 0)
