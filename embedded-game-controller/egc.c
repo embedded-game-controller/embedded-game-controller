@@ -142,8 +142,7 @@ int egc_device_driver_issue_ctrl_transfer_async(egc_input_device_t *device, u8 r
         return _egc_platform_backend.usb.ctrl_transfer_async(device, requesttype, request, value,
                                                              index, data, length, callback);
     } else if (device->connection == EGC_CONNECTION_BT) {
-        return _egc_bt_ctrl_transfer(device, requesttype, request, value, index, data, length,
-                                     callback);
+        _egc_bt_ctrl_transfer(device, requesttype, request, value, index, data, length, callback);
     }
     return 0;
 }

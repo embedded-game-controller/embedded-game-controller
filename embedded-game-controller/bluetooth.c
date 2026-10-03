@@ -575,7 +575,38 @@ int _egc_bt_initialize()
 int _egc_bt_ctrl_transfer(egc_input_device_t *input_device, u8 requesttype, u8 request, u16 value,
                           u16 index, void *data, u16 len, egc_transfer_cb callback)
 {
-    return -1; /* TODO */
+    egc_bt_device_t *device = egc_bt_device_from_input(input_device);
+    if (!device || device->state != EGC_BT_STATE_CONNECTED)
+        return -1;
+
+    uint8_t header = 0;
+    if (request == EGC_USB_REQ_SETREPORT) {
+        header = BTE_HID_TRANS_SETREPORT;
+    } else if (request == EGC_USB_REQ_GETREPORT) {
+        header = BTE_HID_TRANS_GETREPORT;
+        len = 0;
+    }
+    uint8_t report_type = value >> 8;
+    uint8_t report_id = value & 0xff;
+    if (report_type == EGC_USB_REPTYPE_INPUT) {
+        header |= BTE_HID_REP_TYPE_INPUT;
+    } else if (report_type == EGC_USB_REPTYPE_OUTPUT) {
+        header |= BTE_HID_REP_TYPE_OUTPUT;
+    } else if (report_type == EGC_USB_REPTYPE_FEATURE) {
+        header |= BTE_HID_REP_TYPE_FEATURE;
+    }
+
+    BteBufferWriter writer;
+    bool ok = bte_l2cap_create_message(device->s.connected.hid_ctrl, &writer, len + 2);
+    if (!ok)
+        return -1;
+
+    uint8_t *buf = bte_buffer_writer_ptr_n(&writer, len + 2);
+    buf[0] = header;
+    buf[1] = report_id;
+    if (len > 0)
+        memcpy(buf + 2, data, len);
+    return bte_l2cap_send_message(device->s.connected.hid_ctrl, bte_buffer_writer_end(&writer));
 }
 
 int _egc_bt_intr_transfer(egc_input_device_t *input_device, void *data, u16 len)
