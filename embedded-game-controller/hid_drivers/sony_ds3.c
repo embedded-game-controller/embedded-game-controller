@@ -250,10 +250,9 @@ static void ds3_get_report_cb(egc_usb_transfer_t *transfer)
 
 static int ds3_request_data(egc_input_device_t *device)
 {
-    const egc_usb_transfer_t *transfer = egc_device_driver_issue_ctrl_transfer_async(
+    return egc_device_driver_issue_ctrl_transfer_async(
         device, EGC_USB_REQTYPE_INTERFACE_GET, EGC_USB_REQ_GETREPORT,
         (EGC_USB_REPTYPE_INPUT << 8) | 0x01, 0, NULL, 0, ds3_get_report_cb);
-    return transfer != NULL ? 0 : -1;
 }
 
 static void ds3_set_operational_cb(egc_usb_transfer_t *transfer)
@@ -264,10 +263,9 @@ static void ds3_set_operational_cb(egc_usb_transfer_t *transfer)
 
 static int ds3_set_operational(egc_input_device_t *device)
 {
-    const egc_usb_transfer_t *transfer = egc_device_driver_issue_ctrl_transfer_async(
+    return egc_device_driver_issue_ctrl_transfer_async(
         device, EGC_USB_REQTYPE_INTERFACE_GET, EGC_USB_REQ_GETREPORT,
         (EGC_USB_REPTYPE_FEATURE << 8) | 0xf2, 0, NULL, 0, ds3_set_operational_cb);
-    return transfer != NULL ? 0 : -1;
 }
 
 static int ds3_set_leds_rumble(egc_input_device_t *device, u8 leds, const struct ds3_rumble *rumble)
@@ -290,10 +288,9 @@ static int ds3_set_leds_rumble(egc_input_device_t *device, u8 leds, const struct
     buf[4] = rumble->power_left;
     buf[9] = leds;
 
-    const egc_usb_transfer_t *transfer = egc_device_driver_issue_ctrl_transfer_async(
+    return egc_device_driver_issue_ctrl_transfer_async(
         device, EGC_USB_REQTYPE_INTERFACE_SET, EGC_USB_REQ_SETREPORT,
         (EGC_USB_REPTYPE_OUTPUT << 8) | 0x01, 0, buf, sizeof(buf), NULL);
-    return transfer != NULL ? 0 : -1;
 }
 
 static int ds3_driver_update_leds_rumble(egc_input_device_t *device)

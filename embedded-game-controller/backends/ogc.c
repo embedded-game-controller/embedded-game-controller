@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -282,15 +283,14 @@ static int usb_hid_v5_suspend_resume(int host_fd, int dev_id, int resumed)
     return os_ioctl(host_fd, USBV5_IOCTL_SUSPEND_RESUME, buf, sizeof(buf), NULL, 0);
 }
 
-static const egc_usb_transfer_t *ogc_ctrl_transfer_async(egc_input_device_t *input_device,
-                                                         u8 requesttype, u8 request, u16 value,
-                                                         u16 index, void *data, u16 length,
-                                                         egc_transfer_cb callback)
+static int ogc_ctrl_transfer_async(egc_input_device_t *input_device, u8 requesttype, u8 request,
+                                   u16 value, u16 index, void *data, u16 length,
+                                   egc_transfer_cb callback)
 {
     ogc_device_t *device = (ogc_device_t *)input_device;
     ogc_transfer_t *t = get_free_transfer();
     if (!t)
-        return NULL;
+        return -EAGAIN;
 
     assert(length <= sizeof(t->buffer));
     if (length > 0) {
@@ -312,21 +312,20 @@ static const egc_usb_transfer_t *ogc_ctrl_transfer_async(egc_input_device_t *inp
         int rc = usb_hid_v5_ctrl_transfer_async(t, queue_id);
         if (rc < 0) {
             t->t.device = NULL; /* Mark as unused */
-            return NULL;
+            return -1;
         }
         t->t.status = EGC_USB_TRANSFER_STATUS_SUBMITTED;
     }
-    return &t->t;
+    return 0;
 }
 
-static const egc_usb_transfer_t *ogc_intr_transfer_async(egc_input_device_t *input_device,
-                                                         u8 endpoint, void *data, u16 length,
-                                                         egc_transfer_cb callback)
+static int ogc_intr_transfer_async(egc_input_device_t *input_device, u8 endpoint, void *data,
+                                   u16 length, egc_transfer_cb callback)
 {
     ogc_device_t *device = (ogc_device_t *)input_device;
     ogc_transfer_t *t = get_free_transfer();
     if (!t)
-        return NULL;
+        return -EAGAIN;
 
     assert(length <= sizeof(t->buffer));
     if (data)
@@ -345,11 +344,11 @@ static const egc_usb_transfer_t *ogc_intr_transfer_async(egc_input_device_t *inp
         int rc = usb_hid_v5_intr_transfer_async(t, queue_id);
         if (rc < 0) {
             t->t.device = NULL; /* Mark as unused */
-            return NULL;
+            return -1;
         }
         t->t.status = EGC_USB_TRANSFER_STATUS_SUBMITTED;
     }
-    return &t->t;
+    return 0;
 }
 
 static int submit_transfer(ogc_transfer_t *t)

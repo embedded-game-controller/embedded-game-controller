@@ -69,10 +69,10 @@ static void read_interrupts(egc_input_device_t *device)
         device->connection != EGC_CONNECTION_USB || !(priv->endpoint_in & EGC_USB_ENDPOINT_IN))
         return;
 
-    const egc_usb_transfer_t *transfer = egc_device_driver_issue_intr_transfer_async(
-        device, priv->endpoint_in, NULL, priv->endpoint_in_size, interrupt_read_cb);
-    if (!transfer) {
-        EGC_DEBUG("Could not get a in transfer!");
+    int rc = egc_device_driver_issue_intr_transfer_async(device, priv->endpoint_in, NULL,
+                                                         priv->endpoint_in_size, interrupt_read_cb);
+    if (rc < 0) {
+        EGC_DEBUG("Could not get a in transfer (err %d)!", rc);
     }
 }
 
@@ -97,13 +97,12 @@ int egc_device_driver_send_output_report(egc_input_device_t *device, void *data,
 {
     egc_device_priv_t *priv = get_priv(device);
 
-    const egc_usb_transfer_t *transfer =
+    int rc =
         egc_device_driver_issue_intr_transfer_async(device, priv->endpoint_out, data, length, NULL);
-    if (device->connection != EGC_CONNECTION_BT && !transfer) {
-        EGC_DEBUG("Could not get a transfer for out %02x!", ((u8 *)data)[0]);
-        return -1;
+    if (device->connection != EGC_CONNECTION_BT && rc < 0) {
+        EGC_DEBUG("Could not get a transfer for out %02x! (err %d)", ((u8 *)data)[0], rc);
     }
-    return 0;
+    return rc;
 }
 
 void _egc_input_device_intr_data_received(egc_input_device_t *device, const void *data, u16 length)
@@ -135,11 +134,9 @@ bool _egc_can_submit_transfer(egc_usb_transfer_t *t)
     return can_submit;
 }
 
-const egc_usb_transfer_t *egc_device_driver_issue_ctrl_transfer_async(egc_input_device_t *device,
-                                                                      u8 requesttype, u8 request,
-                                                                      u16 value, u16 index,
-                                                                      void *data, u16 length,
-                                                                      egc_transfer_cb callback)
+int egc_device_driver_issue_ctrl_transfer_async(egc_input_device_t *device, u8 requesttype,
+                                                u8 request, u16 value, u16 index, void *data,
+                                                u16 length, egc_transfer_cb callback)
 {
     if (device->connection == EGC_CONNECTION_USB) {
         return _egc_platform_backend.usb.ctrl_transfer_async(device, requesttype, request, value,
@@ -148,13 +145,11 @@ const egc_usb_transfer_t *egc_device_driver_issue_ctrl_transfer_async(egc_input_
         return _egc_bt_ctrl_transfer(device, requesttype, request, value, index, data, length,
                                      callback);
     }
-    return NULL;
+    return 0;
 }
 
-const egc_usb_transfer_t *egc_device_driver_issue_intr_transfer_async(egc_input_device_t *device,
-                                                                      u8 endpoint, void *data,
-                                                                      u16 length,
-                                                                      egc_transfer_cb callback)
+int egc_device_driver_issue_intr_transfer_async(egc_input_device_t *device, u8 endpoint, void *data,
+                                                u16 length, egc_transfer_cb callback)
 {
     if (device->connection == EGC_CONNECTION_USB) {
         return _egc_platform_backend.usb.intr_transfer_async(device, endpoint, data, length,
@@ -163,10 +158,10 @@ const egc_usb_transfer_t *egc_device_driver_issue_intr_transfer_async(egc_input_
         /* Only perform the operation if this is an output transfer;
          * inputs are received over the HID interrupt L2CAP channel. */
         if (endpoint & EGC_USB_ENDPOINT_IN)
-            return NULL;
-        _egc_bt_intr_transfer(device, data, length);
+            return 0;
+        return _egc_bt_intr_transfer(device, data, length);
     }
-    return NULL;
+    return 0;
 }
 
 static bool timer_cb_wrapper(egc_input_device_t *device)

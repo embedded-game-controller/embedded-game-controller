@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <errno.h>
 #include <libusb.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -121,10 +122,9 @@ static void transfer_cb(struct libusb_transfer *transfer)
     free(t);
 }
 
-static const egc_usb_transfer_t *lu_ctrl_transfer_async(egc_input_device_t *input_device,
-                                                        u8 requesttype, u8 request, u16 value,
-                                                        u16 index, void *data, u16 length,
-                                                        egc_transfer_cb callback)
+static int lu_ctrl_transfer_async(egc_input_device_t *input_device, u8 requesttype, u8 request,
+                                  u16 value, u16 index, void *data, u16 length,
+                                  egc_transfer_cb callback)
 {
     lu_device_t *device = lu_device_from_input_device(input_device);
     lu_transfer_t *t;
@@ -132,7 +132,7 @@ static const egc_usb_transfer_t *lu_ctrl_transfer_async(egc_input_device_t *inpu
 
     t = malloc(sizeof(lu_transfer_t));
     if (!t)
-        return NULL;
+        return -ENOMEM;
 
     buffer = t->buffer;
     t->usb = libusb_alloc_transfer(0);
@@ -153,15 +153,14 @@ static const egc_usb_transfer_t *lu_ctrl_transfer_async(egc_input_device_t *inpu
         EGC_WARN("Transfer failed: %d", rc);
         libusb_free_transfer(t->usb);
         free(t);
-        return NULL;
+        return -1;
     }
 
-    return &t->t;
+    return 0;
 }
 
-static const egc_usb_transfer_t *lu_intr_transfer_async(egc_input_device_t *input_device,
-                                                        u8 endpoint, void *data, u16 length,
-                                                        egc_transfer_cb callback)
+static int lu_intr_transfer_async(egc_input_device_t *input_device, u8 endpoint, void *data,
+                                  u16 length, egc_transfer_cb callback)
 {
     lu_device_t *device = lu_device_from_input_device(input_device);
     lu_transfer_t *t;
@@ -169,7 +168,7 @@ static const egc_usb_transfer_t *lu_intr_transfer_async(egc_input_device_t *inpu
 
     t = malloc(sizeof(lu_transfer_t) + 8 + length);
     if (!t)
-        return NULL;
+        return -ENOMEM;
 
     buffer = t->buffer;
     t->usb = libusb_alloc_transfer(0);
@@ -194,9 +193,9 @@ static const egc_usb_transfer_t *lu_intr_transfer_async(egc_input_device_t *inpu
         EGC_WARN("Transfer failed: %d", rc);
         libusb_free_transfer(t->usb);
         free(t);
-        return NULL;
+        return -1;
     }
-    return &t->t;
+    return 0;
 }
 
 static int lu_set_timer(egc_input_device_t *input_device, int time_us, int repeat_time_us,

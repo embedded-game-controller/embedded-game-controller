@@ -53,15 +53,11 @@ void egc_device_driver_set_endpoints(egc_input_device_t *device, u8 endpoint_in,
                                      u8 endpoint_out, u8 interval_out);
 void egc_device_driver_set_read_size(egc_input_device_t *device, u8 size);
 int egc_device_driver_send_output_report(egc_input_device_t *device, void *data, u16 length);
-const egc_usb_transfer_t *egc_device_driver_issue_ctrl_transfer_async(egc_input_device_t *device,
-                                                                      u8 requesttype, u8 request,
-                                                                      u16 value, u16 index,
-                                                                      void *data, u16 length,
-                                                                      egc_transfer_cb callback);
-const egc_usb_transfer_t *egc_device_driver_issue_intr_transfer_async(egc_input_device_t *device,
-                                                                      u8 endpoint, void *data,
-                                                                      u16 length,
-                                                                      egc_transfer_cb callback);
+int egc_device_driver_issue_ctrl_transfer_async(egc_input_device_t *device, u8 requesttype,
+                                                u8 request, u16 value, u16 index, void *data,
+                                                u16 length, egc_transfer_cb callback);
+int egc_device_driver_issue_intr_transfer_async(egc_input_device_t *device, u8 endpoint, void *data,
+                                                u16 length, egc_transfer_cb callback);
 int egc_device_driver_set_timer(egc_input_device_t *device, int time_us, int repeat_time_us);
 
 /* The driver should not update the `state` field in the egc_input_device_t
