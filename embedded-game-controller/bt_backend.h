@@ -18,7 +18,7 @@ typedef struct {
 
 /* Interface for platform-specific BT backends. */
 struct egc_bt_backend_t {
-    egc_input_device_t *(*device_alloc)(const egc_bt_device_desc_t *desc);
+    egc_input_device_t *(*device_alloc)();
     int (*device_add)(egc_input_device_t *device);
     void (*device_free)(egc_input_device_t *device);
 };
