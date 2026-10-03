@@ -19,6 +19,8 @@ typedef struct {
     u8 wait_time_out;
     u8 endpoint_in_size; /* Size to read, in bytes */
 
+    bool intr_events_enabled : 1;
+
     const egc_device_driver_t *driver ATTRIBUTE_ALIGN(4);
     u8 private_data[EGC_INPUT_DEVICE_DRIVER_DATA_SIZE] ATTRIBUTE_ALIGN(4);
 } egc_device_priv_t;
