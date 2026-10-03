@@ -59,6 +59,7 @@ int egc_device_driver_issue_ctrl_transfer_async(egc_input_device_t *device, u8 r
 int egc_device_driver_issue_intr_transfer_async(egc_input_device_t *device, u8 endpoint, void *data,
                                                 u16 length, egc_transfer_cb callback);
 int egc_device_driver_set_timer(egc_input_device_t *device, int time_us, int repeat_time_us);
+int egc_device_driver_enable_intr_events(egc_input_device_t *device, bool enable);
 
 /* The driver should not update the `state` field in the egc_input_device_t
  * structure directly, because this might lead to thread synchronisation issues

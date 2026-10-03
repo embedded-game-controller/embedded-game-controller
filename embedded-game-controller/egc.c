@@ -65,7 +65,7 @@ static void read_interrupts(egc_input_device_t *device)
 {
     egc_device_priv_t *priv = get_priv(device);
 
-    if (device->suspended || !priv->driver->intr_event ||
+    if (device->suspended || !priv->intr_events_enabled ||
         device->connection != EGC_CONNECTION_USB || !(priv->endpoint_in & EGC_USB_ENDPOINT_IN))
         return;
 
@@ -108,7 +108,9 @@ int egc_device_driver_send_output_report(egc_input_device_t *device, void *data,
 void _egc_input_device_intr_data_received(egc_input_device_t *device, const void *data, u16 length)
 {
     egc_device_priv_t *priv = get_priv(device);
-    priv->driver->intr_event(device, data, length);
+    if (priv->intr_events_enabled) {
+        priv->driver->intr_event(device, data, length);
+    }
 }
 
 bool _egc_can_submit_transfer(egc_usb_transfer_t *t)
@@ -175,6 +177,20 @@ static bool timer_cb_wrapper(egc_input_device_t *device)
 int egc_device_driver_set_timer(egc_input_device_t *device, int time_us, int repeat_time_us)
 {
     return _egc_platform_backend.set_timer(device, time_us, repeat_time_us, timer_cb_wrapper);
+}
+
+int egc_device_driver_enable_intr_events(egc_input_device_t *device, bool enabled)
+{
+    egc_device_priv_t *priv = get_priv(device);
+    if (enabled == priv->intr_events_enabled)
+        return 0;
+
+    EGC_DEBUG("enabled = %d", enabled);
+    priv->intr_events_enabled = enabled;
+    if (enabled) {
+        read_interrupts(device);
+    }
+    return 0;
 }
 
 int egc_device_driver_report_input(egc_input_device_t *device, const egc_input_state_t *state)
@@ -455,6 +471,7 @@ static int on_device_added(egc_input_device_t *device)
 
         /* We have ownership, populate the device info */
         priv->driver = driver;
+        priv->intr_events_enabled = true;
         if (driver->init) {
             int rc = driver->init(device);
             if (rc < 0)
