@@ -205,6 +205,7 @@ typedef enum ATTRIBUTE_PACKED {
 static_assert(sizeof(egc_connection_e) == 1);
 
 typedef struct egc_device_description_t {
+    char name[24];
     u16 vendor_id;
     u16 product_id;
     u32 available_buttons; /* bitmask indexed by egc_gamepad_button_e */
