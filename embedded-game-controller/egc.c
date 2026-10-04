@@ -465,6 +465,7 @@ static int on_device_added(egc_input_device_t *device)
         const egc_device_driver_t *driver;
 
         /* Find if we have a driver for that VID/PID */
+        EGC_DEBUG("Name %s", device->desc->name);
         driver = get_usb_device_driver_for(device->desc);
         if (!driver)
             return -1;

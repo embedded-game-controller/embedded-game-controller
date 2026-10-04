@@ -395,6 +395,16 @@ static int update_device_list(void)
             continue;
         }
 
+        if (device->usb.ogcdesc.iProduct != 0) {
+            char name[100];
+            ret = USB_GetAsciiString(device->usb.fd, device->usb.ogcdesc.iProduct, 0x0409,
+                                     sizeof(name), name);
+            if (ret > 0) {
+                strtcpy(device->desc.name, name, sizeof(device->desc.name));
+            }
+            EGC_DEBUG("USB name %s", name);
+        }
+
         /* We have ownership, populate the device info */
         memset(&device->timer_task, 0, sizeof(device->timer_task));
         device->timer_callback = NULL;
