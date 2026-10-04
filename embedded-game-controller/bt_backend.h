@@ -10,7 +10,7 @@ typedef struct egc_bt_backend_t egc_bt_backend_t;
 typedef struct {
     u16 vendor_id;
     u16 product_id;
-    const char *name;
+    char name[32];
     /* We can add here other fields from the DID or HID information retrieved
      * with the SDP query, if needed. But then we'll also need to update the
      * probe() and init() methods of the egc_device_driver_t interface in order

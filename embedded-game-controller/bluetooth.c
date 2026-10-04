@@ -244,6 +244,18 @@ static bool parse_did_attribute(egc_bt_device_desc_t *desc, u16 attr_id, BteSdpD
     return true;
 }
 
+static bool parse_hid_attribute(egc_bt_device_desc_t *desc, u16 attr_id, BteSdpDeReader *reader)
+{
+    switch (attr_id) {
+    case 0x0100 + BTE_SDP_ATTR_ID_LANG_SRV_NAME:
+        size_t len = 0;
+        const char *name = bte_sdp_de_reader_read_str(reader, &len);
+        snprintf(desc->name, sizeof(desc->name), "%.*s", (int)len, name);
+        break;
+    }
+    return true;
+}
+
 static bool parse_sdp_reply(egc_bt_device_desc_t *bt_device_desc, const uint8_t *de)
 {
     BteSdpDeReader reader;
@@ -257,7 +269,7 @@ static bool parse_sdp_reply(egc_bt_device_desc_t *bt_device_desc, const uint8_t 
         if (!bte_sdp_de_reader_enter(&reader))
             continue;
 
-        bool is_did_service = false;
+        u16 service_id = 0;
 
         /* Iterate the list of attributes within a service */
         while (bte_sdp_de_reader_next(&reader)) {
@@ -270,15 +282,15 @@ static bool parse_sdp_reply(egc_bt_device_desc_t *bt_device_desc, const uint8_t 
                 if (!bte_sdp_de_reader_enter(&reader))
                     return false;
                 while (bte_sdp_de_reader_next(&reader)) {
-                    u16 service_id = bte_sdp_de_reader_read_uuid16(&reader);
-                    if (service_id == BTE_SDP_SRV_CLASS_PNP_INFO) {
-                        is_did_service = true;
-                    }
+                    service_id = bte_sdp_de_reader_read_uuid16(&reader);
                 }
                 if (!bte_sdp_de_reader_leave(&reader))
                     return false;
-            } else if (is_did_service) {
+            } else if (service_id == BTE_SDP_SRV_CLASS_PNP_INFO) {
                 if (!parse_did_attribute(bt_device_desc, attr_id, &reader))
+                    return false;
+            } else if (service_id == BTE_SDP_SRV_CLASS_HID) {
+                if (!parse_hid_attribute(bt_device_desc, attr_id, &reader))
                     return false;
             }
         }
@@ -290,8 +302,7 @@ static bool parse_sdp_reply(egc_bt_device_desc_t *bt_device_desc, const uint8_t 
 
 static void connect_to_device(egc_bt_device_t *device, const egc_bt_device_desc_t *desc)
 {
-    EGC_DEBUG("VID %04x, PID %04x, Name: %s", desc->vendor_id, desc->product_id,
-              desc->name ? desc->name : "(NULL)");
+    EGC_DEBUG("VID %04x, PID %04x, Name: %s", desc->vendor_id, desc->product_id, desc->name);
     /* Allocate the device and initialize it, but don't invoke the driver yet. */
     egc_input_device_t *input_device = device->input_device =
         _egc_platform_backend.bt.device_alloc();
@@ -305,11 +316,7 @@ static void connect_to_device(egc_bt_device_t *device, const egc_bt_device_desc_
     egc_device_description_t *wdesc = (egc_device_description_t *)input_device->desc;
     wdesc->vendor_id = desc->vendor_id;
     wdesc->product_id = desc->product_id;
-    if (desc->name) {
-        strtcpy(wdesc->name, desc->name, sizeof(wdesc->name));
-    } else {
-        wdesc->name[0] = '\0';
-    }
+    strtcpy(wdesc->name, desc->name, sizeof(wdesc->name));
 
     if (device->state == EGC_BT_STATE_PROBING) {
         const BteBdAddr *address = device_get_address(device);
@@ -335,7 +342,8 @@ static void read_name_cb(BteHci *hci, const BteHciReadRemoteNameReply *reply, vo
     }
 
     EGC_DEBUG("Got name: %s", reply->name);
-    egc_bt_device_desc_t desc = { 0x0, 0x0, reply->name };
+    egc_bt_device_desc_t desc = { 0x0 };
+    strtcpy(desc.name, reply->name, sizeof(desc.name));
     connect_to_device(device, &desc);
 }
 
