@@ -250,6 +250,34 @@ enum ns_analog_axis_e {
     NS_ANALOG_AXIS__NUM
 };
 
+static const u8 s_elements_report_3f[] = {
+    /* clang-format off */
+    EGC_INPUT_REPORT_TYPE_BUTTON4,
+        EGC_GAMEPAD_BUTTON_RIGHT_TRIGGER,
+        EGC_GAMEPAD_BUTTON_LEFT_TRIGGER,
+        EGC_GAMEPAD_BUTTON_RIGHT_SHOULDER,
+        EGC_GAMEPAD_BUTTON_LEFT_SHOULDER,
+    EGC_INPUT_REPORT_TYPE_BUTTON4,
+        EGC_GAMEPAD_BUTTON_NORTH,
+        EGC_GAMEPAD_BUTTON_WEST,
+        EGC_GAMEPAD_BUTTON_EAST,
+        EGC_GAMEPAD_BUTTON_SOUTH,
+    EGC_INPUT_REPORT_TYPE_BUTTON4,
+        EGC_GAMEPAD_BUTTON_INVALID,
+        EGC_GAMEPAD_BUTTON_INVALID,
+        EGC_GAMEPAD_BUTTON_MISC1, /* Capture */
+        EGC_GAMEPAD_BUTTON_INVALID,
+    EGC_INPUT_REPORT_TYPE_BUTTON4,
+        EGC_GAMEPAD_BUTTON_RIGHT_STICK,
+        EGC_GAMEPAD_BUTTON_LEFT_STICK,
+        EGC_GAMEPAD_BUTTON_START,
+        EGC_GAMEPAD_BUTTON_BACK,
+    EGC_INPUT_REPORT_TYPE_SKIP, 4,
+    EGC_INPUT_REPORT_TYPE_DPAD,
+    EGC_INPUT_REPORT_TYPE_END
+    /* clang-format on */
+};
+
 typedef enum ATTRIBUTE_PACKED {
     NS_CODED_COMMAND,
     NS_CODED_SUBCOMMAND,
@@ -475,14 +503,11 @@ static inline void ns_get_accel(const struct ns_private_data_t *priv,
     accel->y = z * EGC_ACCELEROMETER_RES_PER_G / (priv->accel_divisor[2]);
 }
 
-static bool parse_input_report(egc_input_device_t *device, const ns_input_report_t *report,
-                               struct egc_input_state_t *state)
+static bool parse_input_report_imu(egc_input_device_t *device, const ns_input_report_t *report,
+                                   struct egc_input_state_t *state)
 {
     const struct ns_private_data_t *priv = PRIV(device);
-    if (report->id != JC_INPUT_IMU_DATA && report->id != 0) {
-        EGC_WARN("report ID: %02x", report->id);
-        return false;
-    }
+
     u8 battery_level = report->bat_con >> 4;
     egc_device_driver_set_battery_critical(device, battery_level <= 2);
     s16 axes[2];
@@ -527,6 +552,41 @@ static bool parse_input_report(egc_input_device_t *device, const ns_input_report
         accel->y = -accel->y;
     }
     return true;
+}
+
+static s16 parse_axis_16(const u8 *data)
+{
+    return (data[0] | (data[1] << 8)) + INT16_MIN;
+}
+
+static bool parse_input_report_buttons(egc_input_device_t *device, const u8 *report,
+                                       struct egc_input_state_t *state)
+{
+    egc_device_driver_parse_report(report + 1, s_elements_report_3f, state);
+    if (device->desc->product_id == NS_PID_PRO) {
+        const u8 *axes = report + 4;
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTX, parse_axis_16(axes));
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_LEFTY, parse_axis_16(axes + 2));
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_RIGHTX, parse_axis_16(axes + 4));
+        egc_device_driver_set_axis(state, EGC_GAMEPAD_AXIS_RIGHTY, parse_axis_16(axes + 6));
+    }
+    return true;
+}
+
+static bool parse_input_report(egc_input_device_t *device, const void *report,
+                               struct egc_input_state_t *state)
+{
+    u8 report_id = *(const u8 *)report;
+    if (report_id == JC_INPUT_IMU_DATA) {
+        return parse_input_report_imu(device, report, state);
+    } else if (report_id == JC_INPUT_BUTTON_EVENT) {
+        return parse_input_report_buttons(device, report, state);
+    } else {
+        if (report_id != 0) {
+            EGC_WARN("report ID: %02x", report_id);
+        }
+        return false;
+    }
 }
 
 static int ns_send_report(egc_input_device_t *device, u8 *data, int size)
