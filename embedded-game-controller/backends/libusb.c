@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <ctype.h>
 #include <errno.h>
 #include <libusb.h>
 #include <stddef.h>
@@ -222,6 +223,44 @@ static int lu_report_input(egc_input_device_t *device, const egc_input_state_t *
     return 0;
 }
 
+static void device_setup_completed(lu_device_t *device)
+{
+    int rc = s_event_handler(PUB(device), EGC_EVENT_DEVICE_ADDED, device->desc.vendor_id,
+                             device->desc.product_id);
+    if (rc < 0) {
+        libusb_release_interface(device->handle, 0);
+    }
+}
+
+static void read_desc_cb(struct libusb_transfer *transfer)
+{
+    lu_device_t *device = transfer->user_data;
+
+    if (transfer->status == LIBUSB_TRANSFER_COMPLETED) {
+        struct usbi_string_descriptor {
+            uint8_t bLength;
+            uint8_t bDescriptorType;
+            uint16_t wData[LIBUSB_FLEXIBLE_ARRAY];
+        } *str = libusb_control_transfer_get_data(transfer);
+        char *dest = device->desc.name;
+        int dst_len = sizeof(device->desc.name);
+        /* bLength is the size of the whole descriptor, including bLength and
+         * bDescriptorType, so we remove two bytes. */
+        int src_len = (str->bLength - 2) / sizeof(str->wData[0]);
+        int offset = 0;
+        for (int i = 0; i < src_len && offset < dst_len - 1; i++) {
+            uint16_t c = le16toh(str->wData[i]);
+            if (isprint(c)) {
+                dest[offset++] = c;
+            }
+        }
+        dest[offset] = '\0';
+    }
+    libusb_free_transfer(transfer);
+
+    device_setup_completed(device);
+}
+
 static int on_device_added(libusb_context *ctx, libusb_device *dev, libusb_hotplug_event event,
                            void *user_data)
 {
@@ -256,11 +295,21 @@ static int on_device_added(libusb_context *ctx, libusb_device *dev, libusb_hotpl
     device->repeat_timer_us = 0;
     device->timer_callback = NULL;
     PUB(device)->connection = EGC_CONNECTION_USB;
-
-    rc = s_event_handler(PUB(device), EGC_EVENT_DEVICE_ADDED, desc.idVendor, desc.idProduct);
-    if (rc < 0) {
-        libusb_release_interface(device->handle, 0);
+    if (desc.iProduct != 0) {
+        struct libusb_transfer *t = libusb_alloc_transfer(0);
+        char *buffer = malloc(128 + LIBUSB_CONTROL_SETUP_SIZE);
+        libusb_fill_control_setup(buffer, LIBUSB_ENDPOINT_IN, LIBUSB_REQUEST_GET_DESCRIPTOR,
+                                  (uint16_t)((LIBUSB_DT_STRING << 8) | desc.iProduct), 0x0409, 128);
+        libusb_fill_control_transfer(t, device->handle, buffer, read_desc_cb, device, 3000);
+        t->flags = LIBUSB_TRANSFER_FREE_BUFFER;
+        int rc = libusb_submit_transfer(t);
+        if (rc == LIBUSB_SUCCESS) {
+            /* We'll continue the setup in read_desc_cb */
+            return 0;
+        }
     }
+
+    device_setup_completed(device);
     return 0;
 }
 
