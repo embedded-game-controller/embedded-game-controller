@@ -68,7 +68,7 @@ typedef struct {
 #define MAX_READY_CB 4
 
 static egc_bt_device_t s_bt_devices[EGC_BT_MAX_DEVICES];
-static BteClient *s_client;
+BteClient *_egc_bt_client;
 static bool s_hci_ready = false;
 static BtePacketType s_packet_types;
 static BteL2capServer *s_l2cap_server_hid_ctrl;
@@ -271,7 +271,7 @@ static void hid_ctrl_connect_cb(BteL2cap *l2cap, const BteL2capNewConfiguredRepl
     watch_connection_status(device, l2cap);
 
     const BteBdAddr *address = device_get_address(device);
-    bte_l2cap_new_configured(s_client, address, BTE_L2CAP_PSM_HID_INTR, NULL,
+    bte_l2cap_new_configured(_egc_bt_client, address, BTE_L2CAP_PSM_HID_INTR, NULL,
                              BTE_L2CAP_CONNECT_FLAG_NONE, NULL, hid_intr_connect_cb, device);
 }
 
@@ -364,7 +364,7 @@ static void connect_to_device(egc_bt_device_t *device, const egc_bt_device_desc_
 
     if (device->state == EGC_BT_STATE_PROBING) {
         const BteBdAddr *address = device_get_address(device);
-        bte_l2cap_new_configured(s_client, address, BTE_L2CAP_PSM_HID_CTRL, NULL,
+        bte_l2cap_new_configured(_egc_bt_client, address, BTE_L2CAP_PSM_HID_CTRL, NULL,
                                  BTE_L2CAP_CONNECT_FLAG_NONE, NULL, hid_ctrl_connect_cb, device);
     } else if (device->state == EGC_BT_STATE_INCOMING) {
         /* The SDP channel is stored in the userdata of the HID ctrl channel */
@@ -394,7 +394,7 @@ static void read_name_cb(BteHci *hci, const BteHciReadRemoteNameReply *reply, vo
 static void fallback_retrieve_name(egc_bt_device_t *device)
 {
     /* The SDP reading failed, fall back to read the device name */
-    BteHci *hci = bte_hci_get(s_client);
+    BteHci *hci = bte_hci_get(_egc_bt_client);
     bte_hci_read_remote_name(hci, device_get_address(device), 0, BTE_HCI_CLOCK_OFFSET_INVALID, NULL,
                              read_name_cb, device);
 }
@@ -524,7 +524,7 @@ static void inquiry_cb(BteHci *hci, const BteHciInquiryReply *reply, void *)
         params.clock_offset = r->clock_offset;
         params.page_scan_rep_mode = r->page_scan_rep_mode;
         params.allow_role_switch = true;
-        bte_l2cap_new_configured(s_client, &r->address, BTE_L2CAP_PSM_SDP, &params, flags, NULL,
+        bte_l2cap_new_configured(_egc_bt_client, &r->address, BTE_L2CAP_PSM_SDP, &params, flags, NULL,
                                  sdp_connect_cb, device);
     }
 }
@@ -532,7 +532,7 @@ static void inquiry_cb(BteHci *hci, const BteHciInquiryReply *reply, void *)
 static void add_ready_callback(egc_bt_initialized_cb callback)
 {
     if (s_hci_ready) {
-        BteHci *hci = bte_hci_get(s_client);
+        BteHci *hci = bte_hci_get(_egc_bt_client);
         callback(hci);
     } else {
         int i;
@@ -616,7 +616,7 @@ static void hid_state_changed_cb(BteL2cap *l2cap, BteL2capState state, void *use
     if (device->s.connected.hid_ctrl && device->s.connected.hid_intr &&
         bte_l2cap_get_state(device->s.connected.hid_ctrl) == BTE_L2CAP_OPEN &&
         bte_l2cap_get_state(device->s.connected.hid_intr) == BTE_L2CAP_OPEN) {
-        bte_l2cap_new_configured(s_client, address, BTE_L2CAP_PSM_SDP, NULL,
+        bte_l2cap_new_configured(_egc_bt_client, address, BTE_L2CAP_PSM_SDP, NULL,
                                  BTE_L2CAP_CONNECT_FLAG_NONE, NULL, sdp_connect_cb, device);
     }
 }
@@ -678,8 +678,8 @@ static bool decline_connection(BteL2capServer *l2cap_server, const BteBdAddr *ad
 
 static void enter_page_mode(BteHci *hci)
 {
-    s_l2cap_server_hid_ctrl = bte_l2cap_server_new(s_client, BTE_L2CAP_PSM_HID_CTRL);
-    s_l2cap_server_hid_intr = bte_l2cap_server_new(s_client, BTE_L2CAP_PSM_HID_INTR);
+    s_l2cap_server_hid_ctrl = bte_l2cap_server_new(_egc_bt_client, BTE_L2CAP_PSM_HID_CTRL);
+    s_l2cap_server_hid_intr = bte_l2cap_server_new(_egc_bt_client, BTE_L2CAP_PSM_HID_INTR);
     bte_l2cap_server_set_role(s_l2cap_server_hid_ctrl, BTE_HCI_ROLE_MASTER);
     bte_l2cap_server_on_connected(s_l2cap_server_hid_ctrl, incoming_ctrl_connected_cb, NULL);
     bte_l2cap_server_on_connected(s_l2cap_server_hid_intr, incoming_intr_connected_cb, NULL);
@@ -764,11 +764,11 @@ static bool on_pin_code_requested(BteHci *hci, const BteBdAddr *address, void *u
 
 int _egc_bt_initialize()
 {
-    s_client = bte_client_new();
-    if (!s_client)
+    _egc_bt_client = bte_client_new();
+    if (!_egc_bt_client)
         return -ENOENT;
 
-    BteHci *hci = bte_hci_get(s_client);
+    BteHci *hci = bte_hci_get(_egc_bt_client);
     bte_hci_on_initialized(hci, initialized_cb, NULL);
     /* Default callbacks (negative reply). Calling these functions is needed so
      * that a default handler gets installed. */
@@ -850,7 +850,7 @@ void _egc_bt_on_initialized(egc_bt_initialized_cb callback)
 
 void _egc_bt_run_inquiry()
 {
-    BteHci *hci = bte_hci_get(s_client);
+    BteHci *hci = bte_hci_get(_egc_bt_client);
     bte_hci_inquiry(hci, BTE_LAP_GIAC, 3, 0, NULL, inquiry_cb, NULL);
 }
 
@@ -867,7 +867,7 @@ int egc_bt_stop_scan()
         return 0;
     }
 
-    bte_hci_exit_periodic_inquiry(bte_hci_get(s_client), NULL, NULL);
+    bte_hci_exit_periodic_inquiry(bte_hci_get(_egc_bt_client), NULL, NULL);
     return 0;
 }
 
@@ -914,7 +914,7 @@ int egc_bt_device_get_disconnection_reason(egc_input_device_t *input_device)
 
 int egc_bt_get_local_address(egc_bt_address_t *address)
 {
-    BteHci *hci = bte_hci_get(s_client);
+    BteHci *hci = bte_hci_get(_egc_bt_client);
     bool ok = bte_hci_get_bd_address(hci, (BteBdAddr *)address);
     return ok ? 0 : -1;
 }
@@ -927,13 +927,13 @@ void egc_bt_set_connection_filter(EgcBtConnectionCb callback)
 void egc_bt_on_link_key_requested(EgcBtAuthDataRequestedCb callback)
 {
     s_link_key_requested_cb = callback;
-    BteHci *hci = bte_hci_get(s_client);
+    BteHci *hci = bte_hci_get(_egc_bt_client);
     bte_hci_on_link_key_request(hci, on_link_key_requested);
 }
 
 void egc_bt_send_link_key(const egc_bt_address_t *address, const u8 *link_key)
 {
-    BteHci *hci = bte_hci_get(s_client);
+    BteHci *hci = bte_hci_get(_egc_bt_client);
     if (link_key) {
         bte_hci_link_key_req_reply(hci, (BteBdAddr *)address, (BteLinkKey *)link_key, NULL, NULL);
     } else {
@@ -944,13 +944,13 @@ void egc_bt_send_link_key(const egc_bt_address_t *address, const u8 *link_key)
 void egc_bt_on_link_key_received(EgcBtLinkKeyReceivedCb callback)
 {
     s_link_key_received_cb = callback;
-    BteHci *hci = bte_hci_get(s_client);
+    BteHci *hci = bte_hci_get(_egc_bt_client);
     bte_hci_on_link_key_notification(hci, on_link_key_received);
 }
 
 int egc_bt_store_link_key(const egc_bt_address_t *address, const egc_bt_link_key_t *key)
 {
-    BteHci *hci = bte_hci_get(s_client);
+    BteHci *hci = bte_hci_get(_egc_bt_client);
     BteHciStoredLinkKey stored_key;
     memcpy(&stored_key.address, address, sizeof(egc_bt_address_t));
     memcpy(&stored_key.key, key, sizeof(egc_bt_link_key_t));
@@ -993,7 +993,7 @@ int egc_bt_store_link_key(const egc_bt_address_t *address, const egc_bt_link_key
 
 int egc_bt_delete_link_key(const egc_bt_address_t *address)
 {
-    BteHci *hci = bte_hci_get(s_client);
+    BteHci *hci = bte_hci_get(_egc_bt_client);
     bte_hci_delete_stored_link_key(hci, (BteBdAddr *)address, NULL, NULL);
     return 0;
 }
@@ -1001,13 +1001,13 @@ int egc_bt_delete_link_key(const egc_bt_address_t *address)
 void egc_bt_on_pin_requested(EgcBtAuthDataRequestedCb callback)
 {
     s_pin_code_requested_cb = callback;
-    BteHci *hci = bte_hci_get(s_client);
+    BteHci *hci = bte_hci_get(_egc_bt_client);
     bte_hci_on_pin_code_request(hci, on_pin_code_requested);
 }
 
 void egc_bt_send_pin(const egc_bt_address_t *address, const u8 *pin, u8 length)
 {
-    BteHci *hci = bte_hci_get(s_client);
+    BteHci *hci = bte_hci_get(_egc_bt_client);
     if (pin && length > 0) {
         bte_hci_pin_code_req_reply(hci, (BteBdAddr *)address, pin, length, NULL, NULL);
     } else {
