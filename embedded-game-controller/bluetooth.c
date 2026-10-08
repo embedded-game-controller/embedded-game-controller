@@ -32,6 +32,7 @@ enum {
     EGC_BT_STATE_PROBING,
     EGC_BT_STATE_CONNECTING,
     EGC_BT_STATE_CONNECTED,
+    EGC_BT_STATE_DISCONNECTED,
 };
 
 typedef struct {
@@ -51,6 +52,10 @@ typedef struct {
         struct {
             BteBdAddr address;
         } inquiry;
+
+        struct {
+            uint8_t reason;
+        } disconnected;
     } s;
 } egc_bt_device_t;
 
@@ -122,7 +127,7 @@ static egc_bt_device_t *bt_device_alloc(const BteBdAddr *address)
     return NULL;
 }
 
-static void bt_device_free(egc_bt_device_t *device)
+static void bt_device_free_state(egc_bt_device_t *device)
 {
     if (device->state == EGC_BT_STATE_PROBING) {
         bte_sdp_client_unref(device->s.probing.sdp);
@@ -140,12 +145,26 @@ static void bt_device_free(egc_bt_device_t *device)
             bte_l2cap_unref(device->s.connected.hid_intr);
         }
     }
+}
+
+static void bt_device_free(egc_bt_device_t *device)
+{
+    bt_device_free_state(device);
 
     if (device->input_device) {
         _egc_platform_backend.bt.device_free(device->input_device);
     }
 
     memset(device, 0, sizeof(*device));
+}
+
+static void bt_device_set_disconnected(egc_bt_device_t *device, uint8_t reason)
+{
+    bt_device_free_state(device);
+    device->state = EGC_BT_STATE_DISCONNECTED;
+    device->s.disconnected.reason = reason;
+
+    bt_device_free(device);
 }
 
 static void hid_intr_message_received_cb(BteL2cap *l2cap, BteBufferReader *reader, void *userdata)
@@ -166,7 +185,7 @@ static void hid_disconnected_cb(BteL2cap *l2cap, uint8_t reason, void *userdata)
 {
     egc_bt_device_t *device = userdata;
     EGC_DEBUG("");
-    bt_device_free(device);
+    bt_device_set_disconnected(device, reason);
 }
 
 static void watch_connection_status(egc_bt_device_t *device, BteL2cap *l2cap)
@@ -735,6 +754,14 @@ int egc_bt_device_get_address(egc_input_device_t *input_device, egc_bt_address_t
     return 0;
 }
 
+int egc_bt_device_get_disconnection_reason(egc_input_device_t *input_device)
+{
+    egc_bt_device_t *device = egc_bt_device_from_input(input_device);
+    if (!device || device->state != EGC_BT_STATE_DISCONNECTED)
+        return -EINVAL;
+    return device->s.disconnected.reason;
+}
+
 int egc_bt_get_local_address(egc_bt_address_t *address)
 {
     BteHci *hci = bte_hci_get(s_client);
@@ -785,6 +812,11 @@ int egc_bt_leave_page_mode()
 }
 
 int egc_bt_device_get_address(egc_input_device_t *device, egc_bt_address_t *address)
+{
+    return -ENOSYS;
+}
+
+int egc_bt_device_get_disconnection_reason(egc_input_device_t *device)
 {
     return -ENOSYS;
 }
