@@ -65,8 +65,9 @@ typedef struct {
  * - Starting the inquiry
  * - Setting up the L2CAP server
  * - Platform backend registering a vendor callback (Wii)
+ * - Client callback (not public, for now)
  */
-#define MAX_READY_CB 4
+#define MAX_READY_CB 5
 
 static egc_bt_device_t s_bt_devices[EGC_BT_MAX_DEVICES];
 static BteClient *s_client;
