@@ -43,6 +43,7 @@ typedef struct {
         struct {
             BteL2cap *hid_ctrl;
             BteL2cap *hid_intr;
+            BteSdpClient *sdp;
         } connected;
 
         struct {
@@ -134,8 +135,7 @@ static void bt_device_free_state(egc_bt_device_t *device)
     } else if (device->state == EGC_BT_STATE_CONNECTING ||
                device->state == EGC_BT_STATE_CONNECTED || device->state == EGC_BT_STATE_INCOMING) {
         if (device->state == EGC_BT_STATE_INCOMING) {
-            /* The SDP channel is stored in the userdata of the HID ctrl channel */
-            BteSdpClient *sdp = bte_l2cap_get_userdata(device->s.connected.hid_ctrl);
+            BteSdpClient *sdp = device->s.connected.sdp;
             if (sdp) {
                 bte_sdp_client_unref(sdp);
             }
@@ -342,11 +342,9 @@ static void connect_to_device(egc_bt_device_t *device, const egc_bt_device_desc_
         bte_l2cap_new_configured(s_client, address, BTE_L2CAP_PSM_HID_CTRL, NULL,
                                  BTE_L2CAP_CONNECT_FLAG_NONE, NULL, hid_ctrl_connect_cb, device);
     } else if (device->state == EGC_BT_STATE_INCOMING) {
-        /* The SDP channel is stored in the userdata of the HID ctrl channel */
-        BteSdpClient *sdp = bte_l2cap_get_userdata(device->s.connected.hid_ctrl);
-        bte_sdp_client_unref(sdp);
+        bte_sdp_client_unref(device->s.connected.sdp);
+        device->s.connected.sdp = NULL;
         /* HID channels are already connected, we can proceed with the identification */
-        bte_l2cap_set_userdata(device->s.connected.hid_ctrl, device);
         device_set_connected(device);
     }
 }
@@ -409,7 +407,7 @@ static void sdp_connect_cb(BteL2cap *l2cap, const BteL2capNewConfiguredReply *re
         device->s.probing.sdp = sdp;
         device->state = EGC_BT_STATE_PROBING;
     } else if (device->state == EGC_BT_STATE_INCOMING) {
-        bte_l2cap_set_userdata(device->s.connected.hid_ctrl, sdp);
+        device->s.connected.sdp = sdp;
     }
 
     /* clang-format off */
