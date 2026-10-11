@@ -333,32 +333,6 @@ struct wm_private_data_t {
 static_assert(sizeof(struct wm_private_data_t) <= EGC_INPUT_DEVICE_DRIVER_DATA_SIZE);
 #define PRIV(input_device) ((struct wm_private_data_t *)get_priv(input_device)->private_data)
 
-static const egc_device_description_t s_device_description_wiimote = {
-    .vendor_id = WM_VID_NINTENDO,
-    .product_id = WM_PID_WIIMOTE,
-    /* clang-format off */
-    .available_buttons =
-        BIT(EGC_GAMEPAD_BUTTON_DPAD_UP) |
-        BIT(EGC_GAMEPAD_BUTTON_DPAD_DOWN) |
-        BIT(EGC_GAMEPAD_BUTTON_DPAD_LEFT) |
-        BIT(EGC_GAMEPAD_BUTTON_DPAD_RIGHT) |
-        /* Mapping copied from SDL's SDL_hidapi_wii.c */
-        BIT(EGC_GAMEPAD_BUTTON_NORTH) | /* 2 */
-        BIT(EGC_GAMEPAD_BUTTON_EAST) | /* A */
-        BIT(EGC_GAMEPAD_BUTTON_SOUTH) | /* B */
-        BIT(EGC_GAMEPAD_BUTTON_WEST) | /* 1 */
-        BIT(EGC_GAMEPAD_BUTTON_START) |
-        BIT(EGC_GAMEPAD_BUTTON_GUIDE) |
-        BIT(EGC_GAMEPAD_BUTTON_BACK),
-    .available_axes = 0,
-    /* clang-format on */
-    .type = EGC_DEVICE_TYPE_GAMEPAD,
-    .num_touch_points = 1,
-    .num_leds = 4,
-    .num_accelerometers = 1,
-    .has_rumble = true,
-};
-
 /* We use a union since these operations cannot be done at the same time */
 static union {
     EgcDriverWiimoteReadDataCb read_data;
@@ -387,6 +361,17 @@ static inline void ACR_WriteReg(u32 reg, u32 val)
     s_ipcReg[reg >> 2] = val;
 }
 #endif /* __wii__ */
+
+static void wm_describe_wiimote(egc_device_description_t *desc)
+{
+    egc_device_driver_fill_desc(desc, s_elements_wiimote_btn);
+    desc->available_axes = 0;
+    desc->type = EGC_DEVICE_TYPE_GAMEPAD;
+    desc->num_touch_points = 1;
+    desc->num_leds = 4;
+    desc->num_accelerometers = 1;
+    desc->has_rumble = true;
+}
 
 static inline int wm_send(egc_input_device_t *device, u8 *data, int size)
 {
@@ -1046,7 +1031,7 @@ static void wm_expansion_remove(egc_input_device_t *device)
     priv->exp_type = EGC_WIIMOTE_EXP_NONE;
     /* Return to the description of the lone wiimote */
     struct egc_device_description_t *desc = (struct egc_device_description_t *)device->desc;
-    memcpy(desc, &s_device_description_wiimote, sizeof(s_device_description_wiimote));
+    wm_describe_wiimote(desc);
     if (priv->exp_motion_plus) {
         desc->num_gyroscopes = 1;
     }
@@ -1984,12 +1969,11 @@ static int wm_driver_ops_init(egc_input_device_t *device)
     priv->requested_leds = 1; /* otherwise they will blink forever */
     egc_device_description_t *desc = egc_device_driver_get_desc(device);
     u16 pid = desc->product_id;
-    memcpy(desc, &s_device_description_wiimote, sizeof(s_device_description_wiimote));
+    wm_describe_wiimote(desc);
 
     egc_device_driver_set_endpoints(device, EGC_USB_ENDPOINT_IN | 1, 5, EGC_USB_ENDPOINT_OUT, 5);
 
     if (pid == WM_PID_WIIU_PRO) {
-        desc->product_id = pid;
         desc->num_touch_points = 0;
         desc->num_gyroscopes = 0;
         desc->num_accelerometers = 0;
