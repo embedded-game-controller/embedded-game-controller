@@ -13,9 +13,12 @@
 #define WM_CMD_SET_LEDS        0x11
 #define WM_CMD_SET_REPORT_TYPE 0x12
 #define WM_CMD_IR_ENABLE_CLOCK 0x13
+#define WM_CMD_SPEAKER_ENABLE  0x14
 #define WM_CMD_REQ_STATUS      0x15
 #define WM_CMD_WRITE_DATA      0x16
 #define WM_CMD_READ_DATA       0x17
+#define WM_CMD_SPEAKER_PLAY    0x18
+#define WM_CMD_SPEAKER_MUTE    0x19
 #define WM_CMD_IR_ENABLE_LOGIC 0x1a
 
 #define WM_CMD_FLAG_RUMBLE 0x01
@@ -56,6 +59,9 @@
 #define WM_IR_MODE_FULL     5
 
 /* Register addresses */
+#define WM_REG_SPEAKER_CONF    0x04a20001 /* 7 bytes, 00 FF RR RR VV 0C 0E */
+#define WM_REG_SPEAKER_SUBMIT  0x04a20008
+#define WM_REG_SPEAKER_OPEN    0x04a20009
 #define WM_REG_EXP_START       0x04a40000
 #define WM_REG_EXP_CALIBRATION 0x04a40020
 #define WM_REG_EXP_DECRYPT1    0x04a400f0
@@ -212,16 +218,16 @@ typedef enum ATTRIBUTE_PACKED {
     WM_STATE_MP_LAST = WM_STATE_MP_DISABLING_STATUS,
     /* TODO: expose the Motion+ disable operation to the client? */
 
-    /* Currently not used, since EGC does not support playing sounds yet */
+    /* Speaker states: */
     WM_STATE_SPEAKER_FIRST = 40,
-    WM_STATE_SPEAKER_ENABLING_1,
-    WM_STATE_SPEAKER_ENABLING_2,
-    WM_STATE_SPEAKER_ENABLING_3,
-    WM_STATE_SPEAKER_ENABLING_4,
-    WM_STATE_SPEAKER_ENABLING_5,
-    WM_STATE_SPEAKER_ENABLING_6,
-    WM_STATE_SPEAKER_DISABLING,
-    WM_STATE_SPEAKER_LAST = WM_STATE_SPEAKER_DISABLING,
+    WM_STATE_SPEAKER_ENABLE = WM_STATE_SPEAKER_FIRST,
+    WM_STATE_SPEAKER_MUTE,
+    WM_STATE_SPEAKER_CONF_OPEN,
+    WM_STATE_SPEAKER_CONF_EDIT,
+    WM_STATE_SPEAKER_CONF,
+    WM_STATE_SPEAKER_CONF_DONE,
+    WM_STATE_SPEAKER_UNMUTE,
+    WM_STATE_SPEAKER_LAST = WM_STATE_SPEAKER_UNMUTE,
 } WmState;
 
 struct wm_calibration_accel_t {
@@ -276,6 +282,9 @@ struct wm_private_data_t {
     bool accel_enabled : 1;
     bool held_sideways : 1;
     bool report_type_requested : 1;
+
+    bool speaker_requested : 1;
+    bool speaker_enabled : 1;
 
     EgcWiimoteExpType exp_type : 4;
     u8 remaining_attempts : 4;
@@ -437,6 +446,20 @@ static int wm_set_leds(egc_input_device_t *device, u8 leds)
     return wm_send_report(device, WM_CMD_SET_LEDS, data, sizeof(data));
 }
 
+static int wm_speaker_enable(egc_input_device_t *device, bool enable)
+{
+    u8 data[2];
+    data[1] = (enable ? WM_CMD_FLAG_ENABLE : 0) | WM_CMD_FLAG_ACK;
+    return wm_send_report(device, WM_CMD_SPEAKER_ENABLE, data, sizeof(data));
+}
+
+static int wm_speaker_mute(egc_input_device_t *device, bool mute)
+{
+    u8 data[2];
+    data[1] = (mute ? WM_CMD_FLAG_ENABLE : 0) | WM_CMD_FLAG_ACK;
+    return wm_send_report(device, WM_CMD_SPEAKER_MUTE, data, sizeof(data));
+}
+
 static int wm_ir_step(egc_input_device_t *device)
 {
     struct wm_private_data_t *priv = PRIV(device);
@@ -530,6 +553,56 @@ static int wm_mp_step(egc_input_device_t *device)
          * emitted by the wiimote, but that does not happen on my Chinese
          * replica. So, let's request it explicitly to be safe. */
         rc = wm_request_status(device);
+    }
+
+    return rc;
+}
+
+static int wm_speaker_step(egc_input_device_t *device)
+{
+    struct wm_private_data_t *priv = PRIV(device);
+    int rc = -1;
+
+    EGC_DEBUG("state %d, requested = %d", priv->state, priv->speaker_requested);
+    if (priv->state == WM_STATE_SPEAKER_ENABLE) {
+        rc = wm_speaker_enable(device, priv->speaker_requested);
+    } else if (priv->state == WM_STATE_SPEAKER_MUTE) {
+        rc = wm_speaker_mute(device, true);
+    } else if (priv->state == WM_STATE_SPEAKER_CONF_OPEN) {
+        u8 value = 0x01;
+        rc = wm_write_data(device, WM_REG_SPEAKER_OPEN, &value, sizeof(value));
+    } else if (priv->state == WM_STATE_SPEAKER_CONF_EDIT) {
+        u8 value = 0x08;
+        rc = wm_write_data(device, WM_REG_SPEAKER_CONF, &value, sizeof(value));
+    } else if (priv->state == WM_STATE_SPEAKER_CONF) {
+        u8 value[7] = {
+            0,
+        };
+        egc_audio_device_t *audio_device = _egc_input_device_get_audio(device);
+        if (!audio_device)
+            return -1;
+
+        int freq_dividend;
+        int max_volume;
+        if (audio_device->spec.format == EGC_AUDIO_FORMAT_ADPCM_YAMAHA) {
+            value[1] = 0x00;
+            freq_dividend = 6000000;
+            max_volume = 0x40;
+        } else {
+            value[1] = 0x40;
+            freq_dividend = 12000000;
+            max_volume = 0x60; /* TODO check  0xff */
+        }
+        *(u16 *)(&value[2]) = htole16(freq_dividend / audio_device->spec.frequency);
+        value[4] = max_volume;
+        value[5] = 0x0c;
+        value[6] = 0x0e;
+        rc = wm_write_data(device, WM_REG_SPEAKER_CONF, &value, sizeof(value));
+    } else if (priv->state == WM_STATE_SPEAKER_CONF_DONE) {
+        u8 value = 0x01;
+        rc = wm_write_data(device, WM_REG_SPEAKER_SUBMIT, &value, sizeof(value));
+    } else if (priv->state == WM_STATE_SPEAKER_UNMUTE) {
+        rc = wm_speaker_mute(device, false);
     }
 
     return rc;
@@ -1476,6 +1549,8 @@ static int wm_step(egc_input_device_t *device)
                     priv->motion_plus_requested ? WM_STATE_MP_ENABLING : WM_STATE_MP_DISABLING1;
             } else if (priv->requested_rumble != priv->active_rumble) {
                 priv->state = WM_STATE_RUMBLE_REQ;
+            } else if (priv->speaker_requested != priv->speaker_enabled) {
+                priv->state = WM_STATE_SPEAKER_FIRST;
             } else if (!priv->report_type_requested) {
                 priv->state = WM_STATE_REPORT_REQ;
             }
@@ -1487,6 +1562,8 @@ static int wm_step(egc_input_device_t *device)
             wm_expansion_step(device);
         } else if (priv->state >= WM_STATE_MP_FIRST && priv->state <= WM_STATE_MP_LAST) {
             wm_mp_step(device);
+        } else if (priv->state >= WM_STATE_SPEAKER_FIRST && priv->state <= WM_STATE_SPEAKER_LAST) {
+            wm_speaker_step(device);
         } else if (priv->state == WM_STATE_LEDS_REQ) {
             wm_set_leds(device, priv->requested_leds);
         } else if (priv->state == WM_STATE_RUMBLE_REQ) {
@@ -1512,9 +1589,12 @@ static void wm_step_next(egc_input_device_t *device)
         wm_request_status(device);
     } else if (priv->state == WM_STATE_MP_ENABLING) {
         priv->state = WM_STATE_IDLE;
+    } else if (priv->state == WM_STATE_SPEAKER_ENABLE && !priv->speaker_requested) {
+        priv->state = WM_STATE_IDLE;
     } else if ((priv->state >= WM_STATE_IR_FIRST && priv->state < WM_STATE_IR_LAST) ||
                (priv->state >= WM_STATE_EXP_FIRST && priv->state < WM_STATE_EXP_LAST) ||
-               (priv->state >= WM_STATE_MP_FIRST && priv->state < WM_STATE_MP_LAST)) {
+               (priv->state >= WM_STATE_MP_FIRST && priv->state < WM_STATE_MP_LAST) ||
+               (priv->state >= WM_STATE_SPEAKER_FIRST && priv->state < WM_STATE_SPEAKER_LAST)) {
         priv->state++;
     } else {
         priv->state = WM_STATE_IDLE;
@@ -1633,6 +1713,7 @@ static void wm_status_cb(egc_input_device_t *device, const u8 *data)
      *   priv->leds = status >> 4;
      */
     priv->exp_attached = status & WM_STATUS_EXP_ATTACHED;
+    priv->speaker_enabled = status & WM_STATUS_SPEAKER_ENABLED;
     priv->ir_enabled = status & WM_STATUS_IR_ENABLED;
 
     if (priv->state == WM_STATE_MP_DISABLING_STATUS) {
@@ -1652,7 +1733,12 @@ static void wm_handle_ack(egc_input_device_t *device, const u8 *report)
      * contain the number of bytes written */
     if (command != WM_CMD_WRITE_DATA && error != 0) {
         EGC_WARN("Error %02x on command %02x!", error, command);
-        wm_step_retry(device);
+        if (command == WM_CMD_SPEAKER_PLAY) {
+            /* This happens rather often, but we don't have the buffer anymore
+             * to try again */
+        } else {
+            wm_step_retry(device);
+        }
         return;
     }
     if (command == WM_CMD_SET_LEDS) {
@@ -1665,6 +1751,8 @@ static void wm_handle_ack(egc_input_device_t *device, const u8 *report)
         priv->ir_enabled = true;
     } else if (priv->state == WM_STATE_MP_ENABLING) {
         priv->motion_plus_enabled = priv->motion_plus_requested;
+    } else if (priv->state == WM_STATE_SPEAKER_ENABLE) {
+        priv->speaker_enabled = priv->speaker_requested;
     } else if (s_client_cb.write_data) {
         EgcDriverWiimoteWriteDataCb cb = s_client_cb.write_data;
         s_client_cb.write_data = NULL;
@@ -1672,6 +1760,19 @@ static void wm_handle_ack(egc_input_device_t *device, const u8 *report)
     }
 
     wm_step_next(device);
+}
+
+static int wm_request_speaker(egc_input_device_t *device, bool enabled)
+{
+    struct wm_private_data_t *priv = PRIV(device);
+    if (priv->speaker_requested == enabled)
+        return 0;
+
+    priv->speaker_requested = enabled;
+    if (priv->state == WM_STATE_IDLE) {
+        wm_step(device);
+    }
+    return 0;
 }
 
 static void wm_enable_ir(egc_input_device_t *device, bool enabled)
@@ -1934,6 +2035,54 @@ int wm_driver_ops_enable_touch_points(egc_input_device_t *device, int index, boo
     return 0;
 }
 
+static int wm_audio_stream(egc_audio_device_t *audio_device, const void *data, u16 size)
+{
+    egc_input_device_t *device = audio_device->input_device;
+    if (!device)
+        return -1;
+
+    struct wm_private_data_t *priv = PRIV(device);
+    if (!priv->speaker_requested || !priv->speaker_enabled)
+        return -2;
+
+    u8 report[22];
+    if (size > 20)
+        size = 20;
+    report[1] = size << 3;
+    memcpy(report + 2, data, size);
+    return wm_send_report(device, WM_CMD_SPEAKER_PLAY, report, sizeof(report));
+}
+
+static int wm_audio_close(egc_audio_device_t *audio_device)
+{
+    return wm_request_speaker(audio_device->input_device, false);
+}
+
+static const egc_audio_driver_t wm_audio_driver = {
+    .stream = wm_audio_stream,
+    .close = wm_audio_close,
+};
+
+static int wm_driver_ops_open_audio(egc_input_device_t *device, egc_audio_device_t *audio_device,
+                                    const egc_audio_options_t *options)
+{
+    audio_device->spec.format = options->spec.format;
+    if (audio_device->spec.format != EGC_AUDIO_FORMAT_S8 &&
+        audio_device->spec.format != EGC_AUDIO_FORMAT_ADPCM_YAMAHA) {
+        audio_device->spec.format = EGC_AUDIO_FORMAT_S8;
+    }
+    audio_device->spec.num_channels = 1;
+    audio_device->spec.frequency = options->spec.frequency;
+    if (audio_device->spec.frequency > 3000) {
+        audio_device->spec.frequency = 3000;
+    }
+
+    audio_device->driver = &wm_audio_driver;
+    audio_device->max_stream_size = 20;
+
+    return wm_request_speaker(device, true);
+}
+
 const egc_device_driver_t wm_device_driver = {
     .probe = wm_driver_ops_probe,
     .init = wm_driver_ops_init,
@@ -1943,6 +2092,7 @@ const egc_device_driver_t wm_device_driver = {
     .enable_accelerometer = wm_driver_ops_enable_accelerometer,
     .enable_gyroscope = wm_driver_ops_enable_gyroscope,
     .enable_touch_points = wm_driver_ops_enable_touch_points,
+    .open_audio = wm_driver_ops_open_audio,
 };
 bool wm_statusbar_on_top = false;
 
