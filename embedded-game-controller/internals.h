@@ -2,9 +2,12 @@
 #define EGC_INTERNALS_H
 
 #include "egc.h"
+#include "egc_audio.h"
 #include "utils.h"
 
 #define EGC_INPUT_DEVICE_DRIVER_DATA_SIZE 64
+
+typedef struct egc_audio_driver_t egc_audio_driver_t;
 
 typedef struct {
     egc_input_device_t pub;
@@ -24,6 +27,17 @@ typedef struct {
     const egc_device_driver_t *driver ATTRIBUTE_ALIGN(4);
     u8 private_data[EGC_INPUT_DEVICE_DRIVER_DATA_SIZE] ATTRIBUTE_ALIGN(4);
 } egc_device_priv_t;
+
+struct egc_audio_device_t {
+    egc_audio_device_t *next;
+    egc_input_device_t *input_device;
+    const egc_audio_driver_t *driver;
+    egc_audio_spec_t spec;
+    u16 max_stream_size;
+};
+extern egc_audio_device_t *_egc_audio_devices;
+
+egc_audio_device_t *_egc_input_device_get_audio(egc_input_device_t *device);
 
 extern bool _egc_sensor_bar_position_top;
 

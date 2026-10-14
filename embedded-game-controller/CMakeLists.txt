@@ -32,6 +32,7 @@ add_library(embedded-game-controller-objects OBJECT
     ${PLATFORM_SOURCES}
     bluetooth.c
     egc.c
+    egc_audio.c
     hid_drivers/generic.c
     hid_drivers/generic_mappings.c
     hid_drivers/nintendo_switch.c

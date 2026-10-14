@@ -6,6 +6,12 @@
 
 typedef struct egc_input_device_t egc_input_device_t;
 typedef struct egc_device_driver_t egc_device_driver_t;
+typedef struct egc_audio_driver_t egc_audio_driver_t;
+
+struct egc_audio_driver_t {
+    int (*stream)(egc_audio_device_t *device, const void *data, u16 size);
+    int (*close)(egc_audio_device_t *device);
+};
 
 struct egc_device_driver_t {
     bool (*probe)(const egc_device_description_t *desc);
@@ -19,6 +25,9 @@ struct egc_device_driver_t {
     int (*enable_accelerometer)(egc_input_device_t *device, int index, bool enabled);
     int (*enable_gyroscope)(egc_input_device_t *device, int index, bool enabled);
     int (*enable_touch_points)(egc_input_device_t *device, int index, bool enabled);
+
+    int (*open_audio)(egc_input_device_t *device, egc_audio_device_t *audio_device,
+                      const egc_audio_options_t *options);
 };
 
 typedef struct {
