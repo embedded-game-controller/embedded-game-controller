@@ -5,6 +5,13 @@
 #include "internals.h"
 #include "usb_backend.h"
 
+/* Allow platform backends to override these: */
+#ifndef EGC_MALLOC_DEFINED
+#include <stdlib.h>
+#define egc_malloc(size) malloc(size)
+#define egc_free(ptr)    free(ptr)
+#endif
+
 typedef enum ATTRIBUTE_PACKED {
     EGC_EVENT_DEVICE_ADDED,
     EGC_EVENT_DEVICE_REMOVED,
