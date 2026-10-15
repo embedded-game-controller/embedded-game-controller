@@ -6,9 +6,9 @@
 #include "utils.h"
 #include "wiimote.h"
 
-#define WM_VID_NINTENDO 0x057e
-#define WM_PID_WIIMOTE  0x0306
-#define WM_PID_WIIU_PRO 0x0330
+#define WM_VID_NINTENDO  0x057e
+#define WM_PID_WIIMOTE   0x0306
+#define WM_PID_WIIU_MOTE 0x0330 /* Wii U Pro controller or new wiimote */
 
 #define WM_CMD_SET_LEDS        0x11
 #define WM_CMD_SET_REPORT_TYPE 0x12
@@ -1001,7 +1001,7 @@ static int wm_expansion_step(egc_input_device_t *device)
                priv->state == WM_STATE_EXP_CHECK_ENCRYPTED) {
         rc = wm_read_data(device, WM_REG_EXP_TYPE, 6);
     } else if (priv->state == WM_STATE_EXP_READ_CALIBRATION) {
-        if (device->desc->product_id == WM_PID_WIIU_PRO) {
+        if (priv->exp_type == EGC_WIIMOTE_EXP_CLASSIC_WIIU_PRO) {
             rc = wm_read_data(device, WM_REG_EXP_START, 8);
         } else { /* Wiimote */
             u32 offset = ((priv->remaining_attempts / 2) % 2 == 0) ? 0 : WM_REG_EXP_CALIBRATION_LEN;
@@ -1948,8 +1948,8 @@ static void wm_driver_ops_intr_event(egc_input_device_t *device, const void *dat
 static bool wm_driver_ops_probe(const egc_device_description_t *desc)
 {
     static const egc_device_id_t compatible[] = {
-        { WM_VID_NINTENDO,  WM_PID_WIIMOTE },
-        { WM_VID_NINTENDO, WM_PID_WIIU_PRO },
+        { WM_VID_NINTENDO,   WM_PID_WIIMOTE },
+        { WM_VID_NINTENDO, WM_PID_WIIU_MOTE },
     };
 
     return egc_device_driver_is_compatible(desc, compatible, ARRAY_SIZE(compatible));
@@ -1968,12 +1968,11 @@ static int wm_driver_ops_init(egc_input_device_t *device)
 
     priv->requested_leds = 1; /* otherwise they will blink forever */
     egc_device_description_t *desc = egc_device_driver_get_desc(device);
-    u16 pid = desc->product_id;
     wm_describe_wiimote(desc);
 
     egc_device_driver_set_endpoints(device, EGC_USB_ENDPOINT_IN | 1, 5, EGC_USB_ENDPOINT_OUT, 5);
 
-    if (pid == WM_PID_WIIU_PRO) {
+    if (strncmp(desc->name, "Nintendo RVL-CNT-01-UC", sizeof(desc->name)) == 0) {
         desc->num_touch_points = 0;
         desc->num_gyroscopes = 0;
         desc->num_accelerometers = 0;
