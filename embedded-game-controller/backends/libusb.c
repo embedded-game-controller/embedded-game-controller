@@ -440,3 +440,10 @@ const egc_platform_backend_t _egc_platform_backend = {
     .report_input = lu_report_input,
     .wait_events = lu_wait_events,
 };
+
+u32 egc_get_clock_us()
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (u32)timespec_to_us(&ts);
+}

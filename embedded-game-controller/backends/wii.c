@@ -590,3 +590,8 @@ const egc_platform_backend_t _egc_platform_backend = {
     .report_input = wii_report_input,
     .wait_events = wii_wait_events,
 };
+
+u32 egc_get_clock_us()
+{
+    return (u32)PPCTicksToUs(PPCGetTickCount());
+}

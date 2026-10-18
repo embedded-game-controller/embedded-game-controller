@@ -741,3 +741,10 @@ const egc_platform_backend_t _egc_platform_backend = {
     .report_input = ogc_report_input,
     .wait_events = ogc_wait_events,
 };
+
+u32 egc_get_clock_us()
+{
+    u32 tick_now = *s_hw_timer;
+    /* One tick is 526.7 nanoseconds */
+    return (u32)((u64)tick_now * 527 / 1000);
+}
