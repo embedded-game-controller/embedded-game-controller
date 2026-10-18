@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.13)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 
@@ -14,7 +15,7 @@ execute_process(COMMAND
 project(
     embedded-game-controller
     VERSION ${EGC_MAJOR}.${EGC_MINOR}.${EGC_PATCH}
-    LANGUAGES ASM C
+    LANGUAGES ASM C CXX
 )
 
 include(CMakeDependentOption)
@@ -22,6 +23,8 @@ include(CMakeDependentOption)
 option(WITH_BLUETOOTH "Support bluetooth controllers" ON)
 option(WITH_DEBUG "Print debug messages" OFF)
 option(BUILD_EXAMPLE "Build example program" OFF)
+option(BUILD_TESTS "Build and run tests" OFF)
+option(ENABLE_COVERAGE "Enable code coverage rules" OFF)
 
 option(WITH_DRIVER_DS3 "Enable DualShock 3 driver" ON)
 option(WITH_DRIVER_DS4 "Enable DualShock 4 driver" ON)
@@ -51,6 +54,7 @@ if(CMAKE_SYSTEM_NAME MATCHES "Starlet")
 endif()
 
 set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 20)
 
 add_compile_options(
     ${ARCH}
@@ -60,6 +64,11 @@ add_compile_options(
     ${EXTRA_CFLAGS}
 )
 
+if(BUILD_TESTS AND ENABLE_COVERAGE)
+    include(CodeCoverage)
+    append_coverage_compiler_flags()
+endif()
+
 add_subdirectory(embedded-game-controller)
 
 if(CMAKE_SYSTEM_NAME MATCHES "Starlet")
@@ -68,4 +77,9 @@ endif()
 
 if(BUILD_EXAMPLE)
     add_subdirectory(example)
+endif()
+
+if(BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
 endif()
