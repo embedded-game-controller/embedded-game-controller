@@ -124,3 +124,41 @@ jobs:
 
       - name: Build
         run: cmake --build egc/build -v
+
+  tests:
+    name: Run unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: ./.github/actions/install/gcovr
+
+      - name: Install compiler and dependencies
+        run: |
+          sudo apt-get update -y && sudo apt-get install build-essential cmake libusb-1.0-0-dev \
+            valgrind
+
+      - name: Configure
+        run: |
+          cmake \
+            -DBUILD_TESTS=ON -DENABLE_COVERAGE=ON -DCMAKE_BUILD_TYPE=Debug \
+            -DWITH_BLUETOOTH=OFF \
+            -S . -B build
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Tests
+        working-directory: ${{github.workspace}}/build
+        run: ctest -T memcheck
+
+      - name: Collect coverage
+        working-directory: ${{github.workspace}}/build
+        run: make check-code-coverage
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: ${{github.workspace}}/build/check-code-coverage/
