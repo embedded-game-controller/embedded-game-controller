@@ -1,6 +1,10 @@
 #ifndef EGC_AUDIO_H
 #define EGC_AUDIO_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "egc_types.h"
 
 typedef struct egc_input_device_t egc_input_device_t;
@@ -30,5 +34,9 @@ const egc_audio_spec_t *egc_audio_device_get_spec(egc_audio_device_t *device);
 int egc_audio_device_get_max_stream_size(egc_audio_device_t *device);
 int egc_audio_device_stream(egc_audio_device_t *device, const void *data, u16 size);
 int egc_audio_device_close(egc_audio_device_t *device);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

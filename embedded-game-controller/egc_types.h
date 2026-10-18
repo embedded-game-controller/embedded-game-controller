@@ -1,6 +1,10 @@
 #ifndef EGC_TYPES_H
 #define EGC_TYPES_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -23,6 +27,10 @@ typedef uint32_t u32;
 
 #ifndef ATTRIBUTE_DEPRECATED
 #define ATTRIBUTE_DEPRECATED __attribute__((deprecated))
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #endif
