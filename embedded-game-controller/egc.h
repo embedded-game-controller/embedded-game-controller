@@ -1,6 +1,10 @@
 #ifndef EGC_H
 #define EGC_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <assert.h>
 #include <stdarg.h>
 #include <string.h>
@@ -383,5 +387,9 @@ int egc_bt_device_get_address(egc_input_device_t *device, egc_bt_address_t *addr
 int egc_bt_device_get_disconnection_reason(egc_input_device_t *device);
 
 int egc_bt_get_local_address(egc_bt_address_t *address);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
