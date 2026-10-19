@@ -21,7 +21,7 @@ static_assert(sizeof(egc_event_e) == 1);
 
 typedef int (*egc_event_cb)(egc_input_device_t *device, egc_event_e event, ...);
 /* Return false if the timer must be destroyed */
-typedef bool (*egc_timer_cb)(egc_input_device_t *device);
+typedef bool (*egc_device_timer_cb)(egc_input_device_t *device);
 
 typedef struct egc_platform_backend_t {
     egc_usb_backend_t usb;
@@ -34,7 +34,7 @@ typedef struct egc_platform_backend_t {
     /* Returns < 0 if the timer cannot be set. In general, we should not assume
      * that the platform supports more than a timer per device at a time. */
     int (*set_timer)(egc_input_device_t *device, int time_us, int repeat_time_us,
-                     egc_timer_cb callback);
+                     egc_device_timer_cb callback);
     int (*report_input)(egc_input_device_t *device, const egc_input_state_t *state);
 
     /* All callbacks should be invoked in the context of this call */

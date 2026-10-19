@@ -59,7 +59,7 @@ typedef struct {
     };
     egc_input_state_t next_input;
     KTickTask timer_task;
-    egc_timer_cb timer_callback;
+    egc_device_timer_cb timer_callback;
 } wii_device_t;
 
 #define PUB(d) (&(d)->priv.pub)
@@ -269,7 +269,7 @@ static void timer_cb(KTickTask *timer)
 }
 
 static int wii_set_timer(egc_input_device_t *input_device, int time_us, int repeat_time_us,
-                         egc_timer_cb callback)
+                         egc_device_timer_cb callback)
 {
     wii_device_t *device = (wii_device_t *)input_device;
 
