@@ -568,15 +568,13 @@ static int wm_speaker_step(egc_input_device_t *device)
         if (!audio_device)
             return -1;
 
-        int freq_dividend;
+        int freq_dividend = 12000000;
         int max_volume;
         if (audio_device->spec.format == EGC_AUDIO_FORMAT_ADPCM_YAMAHA) {
             value[1] = 0x00;
-            freq_dividend = 6000000;
             max_volume = 0x40;
         } else {
             value[1] = 0x40;
-            freq_dividend = 12000000;
             max_volume = 0x60; /* TODO check  0xff */
         }
         *(u16 *)(&value[2]) = htole16(freq_dividend / audio_device->spec.frequency);
@@ -2101,8 +2099,8 @@ static int wm_driver_ops_open_audio(egc_input_device_t *device, egc_audio_device
     }
     audio_device->spec.num_channels = 1;
     audio_device->spec.frequency = options->spec.frequency;
-    if (audio_device->spec.frequency > 3000) {
-        audio_device->spec.frequency = 3000;
+    if (audio_device->spec.frequency > 6000) {
+        audio_device->spec.frequency = 6000;
     }
 
     audio_device->driver = &wm_audio_driver;
