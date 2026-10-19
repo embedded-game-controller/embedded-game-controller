@@ -7,6 +7,7 @@
 #include <string.h>
 #include <tuxedo/mailbox.h>
 #include <tuxedo/ppc/clock.h>
+#include <tuxedo/sync.h>
 #include <tuxedo/tick.h>
 
 #ifdef WITH_BLUETOOTH
@@ -34,6 +35,7 @@
 /* Constants */
 #define USB_MAX_DEVICES      32
 #define MAX_ACTIVE_TRANSFERS (USB_MAX_DEVICES + 2)
+#define MAX_MESSAGES         8
 
 typedef struct {
     void *priv;
@@ -84,6 +86,8 @@ static wii_device_t s_devices[MAX_ACTIVE_DEVICES] ATTRIBUTE_ALIGN(32);
 static wii_transfer_t s_transfers[MAX_ACTIVE_TRANSFERS] ATTRIBUTE_ALIGN(32);
 static KMailbox s_worker_queue;
 static uptr s_worker_queue_slots[10];
+static KMutex s_messages_mutex;
+static egc_message_t s_messages[MAX_MESSAGES];
 static egc_event_cb s_event_handler;
 
 static void wii_device_free(wii_device_t *device);
@@ -469,6 +473,12 @@ static int process_events(u32 timeout_us)
                     break;
                 }
             }
+        } else if (message >= (uptr)&s_messages[0] && message < (uptr)&s_messages[MAX_MESSAGES]) {
+            egc_message_t *m = (egc_message_t *)message;
+            egc_message_t client_message = *m;
+            /* Free the slot before invoking the callback */
+            *m = 0;
+            s_event_handler(NULL, EGC_EVENT_MESSAGE_RECEIVED, client_message);
         } else {
             /* Find if this is a timer */
             bool found = false;
@@ -594,4 +604,30 @@ const egc_platform_backend_t _egc_platform_backend = {
 u32 egc_get_clock_us()
 {
     return (u32)PPCTicksToUs(PPCGetTickCount());
+}
+
+int egc_message_post(egc_message_t message)
+{
+    /* We cannot send the message as-is into our mailbox, because if it matches
+     * one of our internal message, we would mishandle it.
+     * So we wrap it into a pointer, whose location is known by the backend.
+     */
+    int rc = -EBUSY;
+    KMutexLock(&s_messages_mutex);
+    for (int i = 0; i < MAX_MESSAGES; i++) {
+        egc_message_t *msg = &s_messages[i];
+        if (*msg == 0) {
+            /* The slot is empty, let's use it */
+            *msg = message;
+            if (KMailboxTrySend(&s_worker_queue, (uptr)msg)) {
+                rc = 0;
+            } else {
+                *msg = 0;
+                rc = -EBUSY;
+            }
+            break;
+        }
+    }
+    KMutexUnlock(&s_messages_mutex);
+    return rc;
 }

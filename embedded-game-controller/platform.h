@@ -16,6 +16,7 @@ typedef enum ATTRIBUTE_PACKED {
     EGC_EVENT_DEVICE_ADDED,
     EGC_EVENT_DEVICE_REMOVED,
     EGC_EVENT_DEVICE_INPUT,
+    EGC_EVENT_MESSAGE_RECEIVED,
 } egc_event_e;
 static_assert(sizeof(egc_event_e) == 1);
 

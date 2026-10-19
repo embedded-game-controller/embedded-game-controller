@@ -3,6 +3,7 @@
 
 #include "egc.h"
 #include "egc_audio.h"
+#include "egc_message.h"
 #include "utils.h"
 
 #define EGC_INPUT_DEVICE_DRIVER_DATA_SIZE 64
@@ -65,5 +66,7 @@ static inline bool _egc_update_endpoint_timeout(egc_device_priv_t *priv, u32 ela
     }
     return endpoint_became_available;
 }
+
+int _egc_message_deliver(egc_message_t message);
 
 #endif

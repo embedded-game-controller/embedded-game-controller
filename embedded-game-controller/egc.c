@@ -499,6 +499,7 @@ static void on_device_input(egc_input_device_t *device, void *data, u16 length)
     }
 }
 
+/* TODO: change the signature, not all events have a device as parameter */
 static int event_handler(egc_input_device_t *device, egc_event_e event, ...)
 {
     va_list args;
@@ -514,6 +515,9 @@ static int event_handler(egc_input_device_t *device, egc_event_e event, ...)
         rc = on_device_added(device);
     } else if (event == EGC_EVENT_DEVICE_REMOVED) {
         rc = on_device_removed(device);
+    } else if (event == EGC_EVENT_MESSAGE_RECEIVED) {
+        egc_message_t message = va_arg(args, intptr_t);
+        rc = _egc_message_deliver(message);
     }
     va_end(args);
     return rc;

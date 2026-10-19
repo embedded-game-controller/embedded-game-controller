@@ -33,6 +33,7 @@ add_library(embedded-game-controller-objects OBJECT
     bluetooth.c
     egc.c
     egc_audio.c
+    egc_message.c
     egc_timer.c
     hid_drivers/generic.c
     hid_drivers/generic_mappings.c
