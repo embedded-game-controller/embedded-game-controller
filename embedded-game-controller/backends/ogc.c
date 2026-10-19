@@ -75,7 +75,7 @@ typedef struct {
     /* Timer ID (-1 if unset), its address used as timer cookie */
     int timer_id;
     bool ready;
-    egc_timer_cb timer_callback;
+    egc_device_timer_cb timer_callback;
 } ogc_device_t;
 
 #define PUB(d) (&(d)->priv.pub)
@@ -414,7 +414,7 @@ static void check_waiting_actions()
 }
 
 static int ogc_set_timer(egc_input_device_t *input_device, int time_us, int repeat_time_us,
-                         egc_timer_cb callback)
+                         egc_device_timer_cb callback)
 {
     ogc_device_t *device = (ogc_device_t *)input_device;
     int rc;

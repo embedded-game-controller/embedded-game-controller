@@ -30,7 +30,7 @@ typedef struct {
     /* Timer ID (-1 if unset), its address used as timer cookie */
     int64_t timer_us;
     int64_t repeat_timer_us;
-    egc_timer_cb timer_callback;
+    egc_device_timer_cb timer_callback;
 } lu_device_t;
 
 #define PUB(d) (&(d)->priv.pub)
@@ -200,7 +200,7 @@ static int lu_intr_transfer_async(egc_input_device_t *input_device, u8 endpoint,
 }
 
 static int lu_set_timer(egc_input_device_t *input_device, int time_us, int repeat_time_us,
-                        egc_timer_cb callback)
+                        egc_device_timer_cb callback)
 {
     lu_device_t *device = lu_device_from_input_device(input_device);
 
