@@ -17,6 +17,7 @@
 #include "bluetooth.h"
 #endif
 
+#include "egc_timer.h"
 #include "platform.h"
 #include "utils.h"
 
@@ -429,6 +430,7 @@ static int process_events(u32 timeout_us)
     bool done = false;
     int count = 0;
 
+    u32 time0 = egc_get_clock_us();
     KTickTask timer;
     if (timeout_us != 0) {
         u64 timeout_ticks = PPCUsToTicks(timeout_us);
@@ -439,7 +441,7 @@ static int process_events(u32 timeout_us)
         uptr message;
 
         if (!KMailboxTryRecv(&s_worker_queue, &message)) {
-            if (timeout_us != 0) {
+            if (timeout_us != 0 && (egc_get_clock_us() - time0) < timeout_us) {
                 message = KMailboxRecv(&s_worker_queue);
                 done = true;
             } else {
