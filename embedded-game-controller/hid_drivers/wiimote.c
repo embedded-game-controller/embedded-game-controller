@@ -1,3 +1,5 @@
+#ifdef WITH_DRIVER_WIIMOTE
+
 #include <bt-embedded/hci.h>
 #include <bt-embedded/l2cap.h>
 #include <limits.h>
@@ -2214,3 +2216,5 @@ void egc_driver_wiimote_set_sideways_default(bool held_sideways)
 {
     s_sideways_default = held_sideways;
 }
+
+#endif /* WITH_DRIVER_WIIMOTE */
