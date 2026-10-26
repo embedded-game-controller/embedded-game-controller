@@ -1,3 +1,5 @@
+#include <bt-embedded/hci.h>
+#include <bt-embedded/l2cap.h>
 #include <limits.h>
 #include <math.h>
 
@@ -1856,6 +1858,19 @@ static void wm_rotate_sideways(egc_input_device_t *device, struct egc_input_stat
     }
 }
 
+/* Set sniff mode to increase the frequency of report processing. This enable
+ * speaker playback without glitches on older non -TR models */
+static void wm_enable_sniff_mode(egc_input_device_t *device)
+{
+    BteL2cap *l2cap = egc_device_driver_get_l2cap(device);
+    BteHci *hci = bte_l2cap_get_hci(l2cap);
+    BteConnHandle conn_handle = bte_l2cap_get_connection_handle(l2cap);
+    BteHciLinkPolicySettings policy =
+        BTE_HCI_LINK_POLICY_SETTINGS_SNIFF | BTE_HCI_LINK_POLICY_SETTINGS_ROLE_SW;
+    bte_hci_write_link_policy_settings(hci, conn_handle, policy, NULL, NULL);
+    bte_hci_set_sniff_mode(hci, conn_handle, 8, 8, 1, 0, NULL, NULL);
+}
+
 static void wm_driver_ops_intr_event(egc_input_device_t *device, const void *data, u16 length)
 {
     struct wm_private_data_t *priv = PRIV(device);
@@ -1971,7 +1986,7 @@ static int wm_driver_ops_init(egc_input_device_t *device)
     egc_device_description_t *desc = egc_device_driver_get_desc(device);
     wm_describe_wiimote(desc);
 
-    egc_device_driver_set_endpoints(device, EGC_USB_ENDPOINT_IN | 1, 5, EGC_USB_ENDPOINT_OUT, 5);
+    wm_enable_sniff_mode(device);
 
     if (strncmp(desc->name, "Nintendo RVL-CNT-01-UC", sizeof(desc->name)) == 0) {
         desc->num_touch_points = 0;
