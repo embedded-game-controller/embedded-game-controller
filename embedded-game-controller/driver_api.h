@@ -61,6 +61,11 @@ static inline egc_device_description_t *egc_device_driver_get_desc(egc_input_dev
 void egc_device_driver_set_endpoints(egc_input_device_t *device, u8 endpoint_in, u8 interval_in,
                                      u8 endpoint_out, u8 interval_out);
 void egc_device_driver_set_read_size(egc_input_device_t *device, u8 size);
+
+/* For BT connections */
+typedef struct bte_l2cap_t BteL2cap;
+BteL2cap *egc_device_driver_get_l2cap(egc_input_device_t *device);
+
 int egc_device_driver_send_output_report(egc_input_device_t *device, void *data, u16 length);
 int egc_device_driver_issue_ctrl_transfer_async(egc_input_device_t *device, u8 requesttype,
                                                 u8 request, u16 value, u16 index, void *data,
