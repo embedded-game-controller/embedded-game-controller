@@ -77,16 +77,26 @@ static BteL2capServer *s_l2cap_server_hid_intr;
 static egc_bt_initialized_cb s_ready_callbacks[MAX_READY_CB];
 static u8 s_ready_callbacks_count = 0;
 
-static const BteBdAddr *device_get_address(const egc_bt_device_t *device)
+/* Return any established L2CAP link, it doesn't matter if it's SDP or HID. */
+static BteL2cap *device_get_l2cap(const egc_bt_device_t *device)
 {
-    if (device->state == EGC_BT_STATE_INQUIRY) {
-        return &device->s.inquiry.address;
-    } else if (device->state == EGC_BT_STATE_PROBING) {
-        BteL2cap *l2cap = bte_sdp_client_get_l2cap(device->s.probing.sdp);
-        return bte_l2cap_get_address(l2cap);
+    if (device->state == EGC_BT_STATE_PROBING) {
+        return bte_sdp_client_get_l2cap(device->s.probing.sdp);
     } else if (device->state == EGC_BT_STATE_CONNECTING ||
                device->state == EGC_BT_STATE_CONNECTED || device->state == EGC_BT_STATE_INCOMING) {
-        return bte_l2cap_get_address(device->s.connected.hid_ctrl);
+        return device->s.connected.hid_ctrl;
+    }
+
+    return NULL;
+}
+
+static const BteBdAddr *device_get_address(const egc_bt_device_t *device)
+{
+    BteL2cap *l2cap;
+    if (device->state == EGC_BT_STATE_INQUIRY) {
+        return &device->s.inquiry.address;
+    } else if ((l2cap = device_get_l2cap(device)) != NULL) {
+        return bte_l2cap_get_address(l2cap);
     }
 
     return NULL;
@@ -702,6 +712,15 @@ void _egc_bt_run_inquiry()
     bte_hci_inquiry(hci, BTE_LAP_GIAC, 3, 0, NULL, inquiry_cb, NULL);
 }
 
+BteL2cap *egc_device_driver_get_l2cap(egc_input_device_t *input_device)
+{
+    egc_bt_device_t *device = egc_bt_device_from_input(input_device);
+    if (!device)
+        return NULL;
+
+    return device_get_l2cap(device);
+}
+
 int egc_bt_start_scan()
 {
     add_ready_callback(start_inquiry);
@@ -771,6 +790,7 @@ int egc_bt_get_local_address(egc_bt_address_t *address)
 
 #include <errno.h>
 
+#include "driver_api.h"
 #include "egc.h"
 
 int _egc_bt_ctrl_transfer(egc_input_device_t *device, u8 requesttype, u8 request, u16 value,
@@ -787,6 +807,11 @@ int _egc_bt_intr_transfer(egc_input_device_t *device, void *data, u16 length)
 int _egc_bt_disconnect(egc_input_device_t *device)
 {
     return -ENOSYS;
+}
+
+BteL2cap *egc_device_driver_get_l2cap(egc_input_device_t *input_device)
+{
+    return NULL;
 }
 
 int egc_bt_start_scan()
