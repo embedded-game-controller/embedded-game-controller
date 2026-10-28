@@ -217,12 +217,6 @@ static int lu_set_timer(egc_input_device_t *input_device, int time_us, int repea
     return 0;
 }
 
-static int lu_report_input(egc_input_device_t *device, const egc_input_state_t *state)
-{
-    memcpy(&device->state, state, sizeof(*state));
-    return 0;
-}
-
 static void device_setup_completed(lu_device_t *device)
 {
     int rc = s_event_handler(PUB(device), EGC_EVENT_DEVICE_ADDED, device->desc.vendor_id,
@@ -437,7 +431,6 @@ const egc_platform_backend_t _egc_platform_backend = {
 #endif
     .init = lu_init,
     .set_timer = lu_set_timer,
-    .report_input = lu_report_input,
     .wait_events = lu_wait_events,
 };
 

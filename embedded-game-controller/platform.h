@@ -36,7 +36,6 @@ typedef struct egc_platform_backend_t {
      * that the platform supports more than a timer per device at a time. */
     int (*set_timer)(egc_input_device_t *device, int time_us, int repeat_time_us,
                      egc_device_timer_cb callback);
-    int (*report_input)(egc_input_device_t *device, const egc_input_state_t *state);
 
     /* All callbacks should be invoked in the context of this call */
     int (*wait_events)(u32 timeout_us);
