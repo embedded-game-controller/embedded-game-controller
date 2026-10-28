@@ -79,7 +79,7 @@ int egc_device_driver_enable_intr_events(egc_input_device_t *device, bool enable
  * structure directly, because this might lead to thread synchronisation issues
  * (the driver could be running in a different thread than the client),
  * therefore it should deliver its updates via this method. */
-int egc_device_driver_report_input(egc_input_device_t *device, const egc_input_state_t *state);
+void egc_device_driver_report_input(egc_input_device_t *device, const egc_input_state_t *state);
 
 /* Remaps device buttons from the `buttons` parameter into a bitfield of
  * egc_gamepad_button_e, according to the given map.

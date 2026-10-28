@@ -431,14 +431,6 @@ static int ogc_set_timer(egc_input_device_t *input_device, int time_us, int repe
     return rc;
 }
 
-static int ogc_report_input(egc_input_device_t *device, const egc_input_state_t *state)
-{
-    enter_critical_section();
-    memcpy(&device->state, state, sizeof(*state));
-    leave_critical_section();
-    return 0;
-}
-
 static bool report_event(egc_event_e type, ogc_device_t *device)
 {
     bool ok = false;
@@ -738,7 +730,6 @@ const egc_platform_backend_t _egc_platform_backend = {
     },
     .init = ogc_init,
     .set_timer = ogc_set_timer,
-    .report_input = ogc_report_input,
     .wait_events = ogc_wait_events,
 };
 

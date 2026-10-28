@@ -213,9 +213,9 @@ int egc_device_driver_enable_intr_events(egc_input_device_t *device, bool enable
     return 0;
 }
 
-int egc_device_driver_report_input(egc_input_device_t *device, const egc_input_state_t *state)
+void egc_device_driver_report_input(egc_input_device_t *device, const egc_input_state_t *state)
 {
-    return _egc_platform_backend.report_input(device, state);
+    memcpy(&device->state, state, sizeof(device->state));
 }
 
 u32 egc_device_driver_map_buttons(u32 buttons, int count, const egc_gamepad_button_e *map)
