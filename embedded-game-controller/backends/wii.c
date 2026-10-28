@@ -79,7 +79,6 @@ typedef struct {
 typedef enum {
     WII_EVENT_DEVICE_ADDED,
     WII_EVENT_DEVICE_REMOVED,
-    WII_EVENT_GOT_INPUT,
 } wii_event_e;
 
 static wii_device_t s_devices[MAX_ACTIVE_DEVICES] ATTRIBUTE_ALIGN(32);
@@ -299,8 +298,6 @@ static bool report_event(wii_event_e type, wii_device_t *device)
         s_event_handler(PUB(device), EGC_EVENT_DEVICE_REMOVED);
         /* Mark this device as not valid */
         wii_device_free(device);
-    } else if (type == WII_EVENT_GOT_INPUT) {
-        memcpy(&PUB(device)->state, &device->next_input, sizeof(device->next_input));
     }
     return true;
 }
@@ -557,14 +554,6 @@ static int wii_set_suspended(egc_input_device_t *input_device, bool suspended)
     return rc == USB_OK ? 0 : -1;
 }
 
-static int wii_report_input(egc_input_device_t *input_device, const egc_input_state_t *state)
-{
-    wii_device_t *device = (wii_device_t *)input_device;
-    memcpy(&device->next_input, state, sizeof(*state));
-    report_event(WII_EVENT_GOT_INPUT, device);
-    return 0;
-}
-
 static int wii_wait_events(u32 timeout_us)
 {
     int events = 0;
@@ -597,7 +586,6 @@ const egc_platform_backend_t _egc_platform_backend = {
 #endif
     .init = wii_init,
     .set_timer = wii_set_timer,
-    .report_input = wii_report_input,
     .wait_events = wii_wait_events,
 };
 
