@@ -216,6 +216,7 @@ int egc_device_driver_enable_intr_events(egc_input_device_t *device, bool enable
 void egc_device_driver_report_input(egc_input_device_t *device, const egc_input_state_t *state)
 {
     memcpy(&device->state, state, sizeof(device->state));
+    device->update_counter++;
 }
 
 u32 egc_device_driver_map_buttons(u32 buttons, int count, const egc_gamepad_button_e *map)

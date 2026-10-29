@@ -179,8 +179,6 @@ typedef struct {
 static_assert(sizeof(egc_point_t) == 4);
 
 typedef struct egc_input_state_t {
-    /* TODO: maybe add a timestamp or a counter, to let the client know if the
-     * data was updated? */
     union {
         u8 bytes[sizeof(u32) /* buttons */
                  + sizeof(s16) * EGC_GAMEPAD_AXIS_COUNT
@@ -199,6 +197,7 @@ typedef struct egc_input_state_t {
         /* TODO: add struct for guitar and drums */
     };
 } egc_input_state_t;
+static_assert(sizeof(egc_input_state_t) == 42);
 
 typedef enum ATTRIBUTE_PACKED {
     EGC_CONNECTION_DISCONNECTED,
@@ -224,6 +223,7 @@ typedef struct egc_device_description_t {
 
 struct egc_input_device_t {
     const egc_device_description_t *desc;
+    u8 update_counter;
     egc_input_state_t state ATTRIBUTE_ALIGN(4);
     egc_connection_e connection : 4;
     bool suspended : 1;
@@ -232,7 +232,7 @@ struct egc_input_device_t {
 
     u8 battery_level; /* 255 = full */
 } ATTRIBUTE_PACKED ATTRIBUTE_ALIGN(8);
-static_assert(sizeof(void *) != 4 || sizeof(struct egc_input_device_t) == 48);
+static_assert(sizeof(void *) != 4 || sizeof(struct egc_input_device_t) == 56);
 
 /* Note: the BD_ADDR bytes are stored in reversed order inside this structure.
  * Use the EGC_BT_ADDRESS_DATA macro to get the individual bytes in the
