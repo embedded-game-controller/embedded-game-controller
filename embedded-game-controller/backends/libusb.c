@@ -241,7 +241,7 @@ static void read_desc_cb(struct libusb_transfer *transfer)
             uint8_t bLength;
             uint8_t bDescriptorType;
             uint16_t wData[LIBUSB_FLEXIBLE_ARRAY];
-        } *str = libusb_control_transfer_get_data(transfer);
+        } *str = (void *)libusb_control_transfer_get_data(transfer);
         char *dest = device->desc.name;
         int dst_len = sizeof(device->desc.name);
         /* bLength is the size of the whole descriptor, including bLength and
