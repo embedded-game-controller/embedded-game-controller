@@ -29,6 +29,12 @@ static const egc_device_driver_t *usb_device_drivers[] = {
 #endif
 };
 
+typedef struct egc_input_cb_data_t {
+    egc_input_device_t *device;
+    const void *raw_report;
+    u16 raw_report_size;
+} egc_input_cb_data_t;
+
 bool _egc_enable_accelerometer_default = true;
 bool _egc_enable_gyroscope_default = true;
 bool _egc_enable_touch_point_default = true;
@@ -36,6 +42,8 @@ bool _egc_enable_touch_point_default = true;
 static egc_input_device_cb s_device_added_cb = NULL;
 static egc_input_device_cb s_device_removed_cb = NULL;
 static egc_input_device_cb s_device_input_cb = NULL;
+
+static egc_input_cb_data_t *s_input_cb_data = NULL;
 
 void *_egc_callbacks_userdata = NULL;
 
@@ -215,11 +223,21 @@ int egc_device_driver_enable_intr_events(egc_input_device_t *device, bool enable
     return 0;
 }
 
-void egc_device_driver_report_input(egc_input_device_t *device, const egc_input_state_t *state)
+void egc_device_driver_report_input_full(egc_input_device_t *device, const egc_input_state_t *state,
+                                         const void *raw_report, u16 raw_report_size)
 {
     memcpy(&device->state, state, sizeof(device->state));
     if (s_device_input_cb) {
+        /* Using a static variable here is fine, because EGC is meant to be
+         * used from one thread only, and the raw report data is only valid
+         * while the callback is called */
+        egc_input_cb_data_t input_cb_data;
+        input_cb_data.device = device;
+        input_cb_data.raw_report = raw_report;
+        input_cb_data.raw_report_size = raw_report_size;
+        s_input_cb_data = &input_cb_data;
         s_device_input_cb(device, _egc_callbacks_userdata);
+        s_input_cb_data = NULL;
     }
 }
 
@@ -551,6 +569,18 @@ int egc_initialize(egc_input_device_cb added_cb, egc_input_device_cb removed_cb,
 void egc_register_input_handler(egc_input_device_cb callback)
 {
     s_device_input_cb = callback;
+}
+
+void egc_input_device_get_raw_report(egc_input_device_t *input_device, const void **report,
+                                     u16 *size)
+{
+    if (!s_input_cb_data || s_input_cb_data->device != input_device) {
+        *report = NULL;
+        *size = 0;
+    } else {
+        *report = s_input_cb_data->raw_report;
+        *size = s_input_cb_data->raw_report_size;
+    }
 }
 
 int egc_input_device_enable_accelerometer(egc_input_device_t *device, int index, bool enabled)
