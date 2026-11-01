@@ -1960,7 +1960,7 @@ static void wm_driver_ops_intr_event(egc_input_device_t *device, const void *dat
     }
 
     // egc_device_driver_parse_report(data, priv->report_elements, &state);
-    egc_device_driver_report_input(device, &state);
+    egc_device_driver_report_input_full(device, &state, data, length);
 }
 
 static bool wm_driver_ops_probe(const egc_device_description_t *desc)
