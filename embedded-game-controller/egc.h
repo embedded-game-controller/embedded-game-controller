@@ -264,6 +264,13 @@ static inline int egc_bt_address_cmp(const egc_bt_address_t *a, const egc_bt_add
 typedef void (*egc_input_device_cb)(egc_input_device_t *device, void *userdata);
 
 int egc_initialize(egc_input_device_cb added_cb, egc_input_device_cb removed_cb, void *userdata);
+/**
+ * Register a callback to be invoked whener new input is available on a device.
+ *
+ * It's not necessary to register a callback, since data can be directly read
+ * from the egc_input_device_t structure.
+ */
+void egc_register_input_handler(egc_input_device_cb callback);
 int egc_input_device_suspend(egc_input_device_t *device);
 int egc_input_device_resume(egc_input_device_t *device);
 /* led_state is a bit mask of the active leds */
