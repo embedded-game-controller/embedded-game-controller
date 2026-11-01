@@ -35,6 +35,8 @@ bool _egc_enable_touch_point_default = true;
 
 static egc_input_device_cb s_device_added_cb = NULL;
 static egc_input_device_cb s_device_removed_cb = NULL;
+static egc_input_device_cb s_device_input_cb = NULL;
+
 void *_egc_callbacks_userdata = NULL;
 
 static void read_interrupts(egc_input_device_t *device);
@@ -216,6 +218,9 @@ int egc_device_driver_enable_intr_events(egc_input_device_t *device, bool enable
 void egc_device_driver_report_input(egc_input_device_t *device, const egc_input_state_t *state)
 {
     memcpy(&device->state, state, sizeof(device->state));
+    if (s_device_input_cb) {
+        s_device_input_cb(device, _egc_callbacks_userdata);
+    }
 }
 
 u32 egc_device_driver_map_buttons(u32 buttons, int count, const egc_gamepad_button_e *map)
@@ -541,6 +546,11 @@ int egc_initialize(egc_input_device_cb added_cb, egc_input_device_cb removed_cb,
 #endif
 
     return rc;
+}
+
+void egc_register_input_handler(egc_input_device_cb callback)
+{
+    s_device_input_cb = callback;
 }
 
 int egc_input_device_enable_accelerometer(egc_input_device_t *device, int index, bool enabled)
