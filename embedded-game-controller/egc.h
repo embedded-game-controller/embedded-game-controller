@@ -373,6 +373,17 @@ static inline u8 egc_input_device_get_battery_level(egc_input_device_t *device)
     return device->battery_level;
 }
 
+/**
+ * Get the raw report that was sent to the device driver.
+ *
+ * This can only be called from within the input handler registered with
+ * egc_register_input_handler(). Drivers are not required to provide this
+ * information, so the client must be ready to handle the case when the
+ * received report is NULL.
+ */
+void egc_input_device_get_raw_report(egc_input_device_t *input_device, const void **report,
+                                     u16 *size);
+
 /* Functions to enable/disable sensor features. The initial status of these
  * features is enabled; use the
  *
