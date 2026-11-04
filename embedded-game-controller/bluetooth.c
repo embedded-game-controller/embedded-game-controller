@@ -375,8 +375,26 @@ static void connect_to_device(egc_bt_device_t *device, const egc_bt_device_desc_
 
     if (device->state == EGC_BT_STATE_PROBING) {
         const BteBdAddr *address = device_get_address(device);
-        bte_l2cap_new_configured(s_client, address, BTE_L2CAP_PSM_HID_CTRL, NULL,
-                                 BTE_L2CAP_CONNECT_FLAG_NONE, NULL, hid_ctrl_connect_cb, device);
+        BteL2CapConnectFlags flags = BTE_L2CAP_CONNECT_FLAG_NONE;
+        if (s_connection_cb) {
+            bool is_incoming = false;
+            egc_bt_device_info_t info = { 0 };
+            info.vendor_id = wdesc->vendor_id;
+            info.product_id = wdesc->product_id;
+            egc_bt_connection_reply_e reply = s_connection_cb(
+                (const egc_bt_address_t *)address, &info, is_incoming, _egc_callbacks_userdata);
+            if (reply == EGC_BT_CONNECTION_REPLY_REFUSE) {
+                EGC_DEBUG("Client refused connection, disconnecting");
+                bt_device_free(device);
+                return;
+            }
+
+            if (reply == EGC_BT_CONNECTION_REPLY_REQ_AUTH)
+                flags |= BTE_L2CAP_CONNECT_FLAG_AUTH;
+        }
+
+        bte_l2cap_new_configured(s_client, address, BTE_L2CAP_PSM_HID_CTRL, NULL, flags, NULL,
+                                 hid_ctrl_connect_cb, device);
     } else if (device->state == EGC_BT_STATE_INCOMING) {
         bte_sdp_client_unref(device->s.connected.sdp);
         device->s.connected.sdp = NULL;
@@ -501,27 +519,6 @@ static void inquiry_cb(BteHci *hci, const BteHciInquiryReply *reply, void *)
             continue;
         }
 
-        BteL2CapConnectFlags flags = BTE_L2CAP_CONNECT_FLAG_NONE;
-        if (s_connection_cb) {
-            bool is_incoming = false;
-            egc_bt_connection_reply_e reply =
-                s_connection_cb((const egc_bt_address_t *)&r->address,
-                                bte_cod_get_service_class(r->class_of_device),
-                                bte_cod_get_major_dev_class(r->class_of_device),
-                                bte_cod_get_minor_dev_class(r->class_of_device), is_incoming,
-                                _egc_callbacks_userdata);
-            if (reply == EGC_BT_CONNECTION_REPLY_REFUSE)
-                continue;
-            /* TODO: once
-             * https://github.com/embedded-game-controller/bt-embedded/issues/10
-             * is fixed, it's probably better to request authentication after
-             * the SDP connection has been established. And maybe the decision
-             * on whether authentication is needed should be taken by the HID
-             * driver. */
-            if (reply == EGC_BT_CONNECTION_REPLY_REQ_AUTH)
-                flags |= BTE_L2CAP_CONNECT_FLAG_AUTH;
-        }
-
         egc_bt_device_t *device = bt_device_alloc(&r->address);
         if (!device) {
             EGC_DEBUG("No more BT slots available");
@@ -533,6 +530,7 @@ static void inquiry_cb(BteHci *hci, const BteHciInquiryReply *reply, void *)
         params.clock_offset = r->clock_offset;
         params.page_scan_rep_mode = r->page_scan_rep_mode;
         params.allow_role_switch = true;
+        BteL2CapConnectFlags flags = BTE_L2CAP_CONNECT_FLAG_NONE;
         bte_l2cap_new_configured(s_client, &r->address, BTE_L2CAP_PSM_SDP, &params, flags, NULL,
                                  sdp_connect_cb, device);
     }
@@ -667,10 +665,12 @@ static bool connection_request_cb(BteL2capServer *l2cap_server, const BteBdAddr 
 {
     if (s_connection_cb) {
         bool is_incoming = true;
-        egc_bt_connection_reply_e reply =
-            s_connection_cb((const egc_bt_address_t *)address, bte_cod_get_service_class(*cod),
-                            bte_cod_get_major_dev_class(*cod), bte_cod_get_minor_dev_class(*cod),
-                            is_incoming, _egc_callbacks_userdata);
+        egc_bt_device_info_t info = { 0 };
+        info.service_class = bte_cod_get_service_class(*cod);
+        info.device_class_major = bte_cod_get_major_dev_class(*cod);
+        info.device_class_minor = bte_cod_get_minor_dev_class(*cod);
+        egc_bt_connection_reply_e reply = s_connection_cb((const egc_bt_address_t *)address, &info,
+                                                          is_incoming, _egc_callbacks_userdata);
         if (reply == EGC_BT_CONNECTION_REPLY_REFUSE)
             return false;
 
