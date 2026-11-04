@@ -422,13 +422,21 @@ typedef enum {
     EGC_BT_CONNECTION_REPLY_REQ_AUTH,
 } egc_bt_connection_reply_e;
 
+typedef struct {
+    /* Note: not all fields might be set */
+    u16 service_class;
+    u8 device_class_major;
+    u8 device_class_minor;
+    u16 vendor_id;
+    u16 product_id;
+} egc_bt_device_info_t;
+
 /**
  * Called when a connection is about to be established.
  */
 typedef egc_bt_connection_reply_e (*EgcBtConnectionCb)(const egc_bt_address_t *address,
-                                                       u16 service_class, u8 device_class_major,
-                                                       u8 device_class_minor, bool is_incoming,
-                                                       void *userdata);
+                                                       const egc_bt_device_info_t *info,
+                                                       bool is_incoming, void *userdata);
 
 void egc_bt_set_connection_filter(EgcBtConnectionCb callback);
 
