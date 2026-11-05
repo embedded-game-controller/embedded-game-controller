@@ -516,9 +516,11 @@ static int wii_init(egc_event_cb event_handler)
 
     s_event_handler = event_handler;
 
+#ifdef WITH_DRIVER_GAMECUBE
     rc = _egc_gc_init(event_handler);
     if (rc < 0)
         return -1;
+#endif
 
     rc = USB_Initialize();
     if (rc != USB_OK)
@@ -557,12 +559,17 @@ static int wii_set_suspended(egc_input_device_t *input_device, bool suspended)
 static int wii_wait_events(u32 timeout_us)
 {
     int events = 0;
-    int rc = _egc_gc_process_events(s_event_handler);
+    int rc;
+
+#ifdef WITH_DRIVER_GAMECUBE
+    rc = _egc_gc_process_events(s_event_handler);
     if (rc > 0) {
         /* No need to wait */
         timeout_us = 0;
         events += rc;
     }
+#endif
+
     rc = process_events(timeout_us);
     if (rc > 0) {
         events += rc;

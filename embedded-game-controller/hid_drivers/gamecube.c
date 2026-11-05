@@ -1,3 +1,5 @@
+#ifdef WITH_DRIVER_GAMECUBE
+
 #include <assert.h>
 #include <ogc/pad.h>
 
@@ -199,3 +201,5 @@ static int gc_driver_ops_set_rumble(egc_input_device_t *device, u16 low_frequenc
 const egc_device_driver_t gc_device_driver = {
     .set_rumble = gc_driver_ops_set_rumble,
 };
+
+#endif /* WITH_DRIVER_GAMECUBE */
