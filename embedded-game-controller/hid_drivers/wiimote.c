@@ -1881,6 +1881,7 @@ static void wm_driver_ops_intr_event(egc_input_device_t *device, const void *dat
     };
     egc_point_t ir_points[4];
     bool has_ir = false;
+    bool has_exp = false;
     const u8 *report = data;
 
     // EGC_DEBUG_DATA(data, length);
@@ -1917,6 +1918,7 @@ static void wm_driver_ops_intr_event(egc_input_device_t *device, const void *dat
         if (length < WM_REP_BTN_ACC_EXP_LEN)
             return;
         wm_parse_exp(device, report + WM_REP_BTN_ACC_LEN, &state);
+        has_exp = true;
         wm_parse_accel(device, report, &priv->wiimote.cal, &state);
         wm_parse_buttons(report, &state);
         break;
@@ -1925,6 +1927,7 @@ static void wm_driver_ops_intr_event(egc_input_device_t *device, const void *dat
         if (length < WM_REP_BTN_EXP8_LEN)
             return;
         wm_parse_exp(device, report + WM_REP_BTN_LEN, &state);
+        has_exp = true;
         wm_parse_buttons(report, &state);
         break;
     case WM_REP_BTN_ACC_IR_EXP:
@@ -1933,6 +1936,7 @@ static void wm_driver_ops_intr_event(egc_input_device_t *device, const void *dat
         wm_parse_ir_basic(report + WM_REP_BTN_ACC_LEN, ir_points);
         has_ir = true;
         wm_parse_exp(device, report + WM_REP_BTN_ACC_LEN + WM_REP_IR_BASIC_LEN, &state);
+        has_exp = true;
         // fallthrough
     case WM_REP_BTN_ACC:
         if (length < WM_REP_BTN_ACC_LEN)
@@ -1959,7 +1963,13 @@ static void wm_driver_ops_intr_event(egc_input_device_t *device, const void *dat
         wm_rotate_sideways(device, &state);
     }
 
-    // egc_device_driver_parse_report(data, priv->report_elements, &state);
+    if (!has_exp && priv->exp_type != EGC_WIIMOTE_EXP_NONE &&
+        priv->exp_type != EGC_WIIMOTE_EXP_MOTION_PLUS) {
+        /* We have an expansion but we haven't parsed its data: avoid sending a
+         * report, otherwise it will look like its buttons have been released. */
+        return;
+    }
+
     egc_device_driver_report_input_full(device, &state, data, length);
 }
 
