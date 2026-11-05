@@ -28,6 +28,7 @@ option(ENABLE_COVERAGE "Enable code coverage rules" OFF)
 
 option(WITH_DRIVER_DS3 "Enable DualShock 3 driver" ON)
 option(WITH_DRIVER_DS4 "Enable DualShock 4 driver" ON)
+option(WITH_DRIVER_GAMECUBE "Enable GameCube driver" ON)
 option(WITH_DRIVER_NINTENDO_SWITCH "Enable Nintendo Switch driver" ON)
 option(WITH_DRIVER_GENERIC "Enable generic driver" ON)
 option(WITH_GENERIC_MAPPINGS "Enable hardcoded generic mappings" ON)
